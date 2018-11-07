@@ -1,5 +1,5 @@
 [package]
-name = "RustyGame"
+name = "rusty_game"
 version = "0.1.0"
 authors = ["Grigory \"Griffone\" Glukhvo <thegriffones@gmail.com>"]
 
