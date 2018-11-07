@@ -1,0 +1,6 @@
+[package]
+name = "RustyGame"
+version = "0.1.0"
+authors = ["Grigory \"Griffone\" Glukhvo <thegriffones@gmail.com>"]
+
+[dependencies]
