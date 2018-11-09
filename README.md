@@ -2,8 +2,9 @@
 A hardware-accelerated 2Dish game in Rust.
 
 ## Goals:
-- [ ] Create a window
-- [ ] Populate window with OpenGL context
+- [x] Create a window
+- [x] Populate window with OpenGL context
+- [ ] General file loading
 - [ ] Basic text rendering
 - [ ] SDF font rendering
 - [ ] GUI layouter
