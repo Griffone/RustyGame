@@ -1,8 +1,13 @@
 [package]
 name = "rusty_game"
 version = "0.1.0"
-authors = ["Grigory \"Griffone\" Glukhvo <thegriffones@gmail.com>"]
+authors = ["Grigory \"Griffone\" Glukhov <thegriffones@gmail.com>"]
 
 [dependencies]
-rand = "0.4.0"
-glium = "*"
+rand = "0.4"
+glium = "0.22"
+rusttype = "0.7"
+unicode-normalization = "0.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_yaml = "0.8"
