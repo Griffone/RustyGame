@@ -15,10 +15,10 @@ use std::io::Error as IoError;
 #[derive(Copy, Clone)]
 pub struct Vertex {
 	position: [f32; 2],
-//	tex_coords: [f32; 2],
+	tex_coords: [f32; 2],
 }
 
-implement_vertex!(Vertex, position); //, tex_coords);
+implement_vertex!(Vertex, position, tex_coords);
 
 
 // Graphical context
@@ -32,6 +32,7 @@ pub struct Graphics {
 	// temporary variables for testing
 	verts: VertexBuffer<Vertex>,
 	indcs: IndexBuffer<u16>,
+	texture: glium::texture::CompressedSrgbTexture2d,
 }
 
 impl Graphics {
@@ -40,26 +41,45 @@ impl Graphics {
 
 		let (verts, indcs) = generate_quad(&display)?;
 
-		Ok(Graphics {display: display, program: program, verts: verts, indcs: indcs})
+		let texture = image::open(std::path::Path::new("data/textures/test.png")).unwrap().to_rgba();
+		let texture_size = texture.dimensions();
+		let texture = glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
+		let texture = glium::texture::CompressedSrgbTexture2d::new(&display, texture).unwrap();
+
+		Ok(Graphics {display: display, program: program, verts: verts, indcs: indcs, texture: texture})
 	}
 
-	pub fn draw(&self) {
+	pub fn draw(&self, rotation: f32) {
+		let params = glium::DrawParameters {
+			blend: glium::Blend::alpha_blending(),
+			.. Default::default()
+		};
+
 		let mut width_to_height = 1.0f32;
 		if let Some(size) = self.display.gl_window().get_inner_size() {
 			width_to_height = size.width as f32 / size.height as f32;
 		}
 
-		let uniforms = uniform! {
-			u_translate: [0.0, 0.0f32],
-			u_z_theta: [0.0, 0.0f32],
-			u_scale: [1.0, width_to_height],
-
-			u_color: [1.0, 1.0, 0.0, 1.0f32],
-		};
-
 		let mut target = self.display.draw();
 		target.clear_color(0.0, 0.0, 1.0, 1.0);
-		target.draw(&self.verts, &self.indcs, &self.program, &uniforms, &Default::default()).unwrap();
+		let x_max = 50;
+		let y_max = 50;
+		let x_step = 2.0 / x_max as f32;
+		let y_step = 2.0 / y_max as f32;
+		for x in 1..x_max {
+			for y in 1..y_max {
+				let uniforms = uniform! {
+					u_translate: [-1.0 + x as f32 * x_step, -1.0 + y as f32 * y_step],
+					u_z_theta: [0.5, rotation],
+					u_scale: [x_step, x_step * width_to_height],
+
+					u_color: [1.0, 1.0, 0.0, 1.0f32],
+					u_texture: &self.texture,
+				};
+
+				target.draw(&self.verts, &self.indcs, &self.program, &uniforms, &params).unwrap();
+			}
+		}
 		target.finish().unwrap();
 	}
 
@@ -169,14 +189,10 @@ where
 	let vertex_buffer = VertexBuffer::new(
 		facade,
 		&[
-			Vertex { position: [-0.5,  0.5] },
-			Vertex { position: [-0.5, -0.5] },
-			Vertex { position: [ 0.5,  0.5] },
-			Vertex { position: [ 0.5, -0.5] },
-//			Vertex { position: [-0.5, -0.5], tex_coords: [0.0, 0.0], },
-//			Vertex { position: [-0.5,  0.5], tex_coords: [0.0, 1.0], },
-//			Vertex { position: [ 0.5,  0.5], tex_coords: [1.0, 1.0], },
-//			Vertex { position: [ 0.5, -0.5], tex_coords: [1.0, 0.0], },
+			Vertex { position: [-0.5,  0.5], tex_coords: [0.0, 1.0], },
+			Vertex { position: [-0.5, -0.5], tex_coords: [0.0, 0.0], },
+			Vertex { position: [ 0.5,  0.5], tex_coords: [1.0, 1.0], },
+			Vertex { position: [ 0.5, -0.5], tex_coords: [1.0, 0.0], },
 		],
 	)?;
 	let index_buffer = IndexBuffer::new(

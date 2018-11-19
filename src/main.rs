@@ -12,6 +12,8 @@ extern crate serde_yaml;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate image;	// For loading texture files
+
 
 mod config;
 mod graphics;
@@ -53,6 +55,8 @@ fn main() {
 		let graphics = Graphics::new(display, &config).unwrap();
 		let window = graphics.window();
 
+		let mut t = 0.0;
+
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
@@ -74,13 +78,20 @@ fn main() {
 		}
 		set_fullscreen(&window, config.fullscreen, &mut state);
 
+		let begin = std::time::Instant::now();
+		let mut frames = 0;
 		while !state.closed {
-			graphics.draw();
+			t += 0.01;
+			graphics.draw(t);
+			frames += 1;
 
 			events_loop.poll_events(|event| {
 				process_event(&event, &window, &mut state, config.debug_mode);
 			});
 		}
+		let duration = std::time::Instant::now().duration_since(begin);
+		let frame_rate = frames / duration.as_secs();
+		println!("Produces {} frames over {:#?}, resuling in {} fps", frames, duration, frame_rate);
 
 		config.set_window_position(state.last_pos);
 		config.set_fullscreen(state.fullscreen);

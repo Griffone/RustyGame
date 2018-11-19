@@ -6,7 +6,9 @@ A hardware-accelerated 2D* game in Rust.
 ## Goals:
 - [x] Create a window
 - [x] Populate window with OpenGL context
-- [ ] Basic graphics
+- [x] Basic graphics
+- [ ] Instancing
+- [ ] Graphical backend
 - [ ] General file loading
 - [ ] Basic text rendering
 - [ ] GUI layouter
