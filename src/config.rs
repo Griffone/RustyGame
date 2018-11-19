@@ -6,8 +6,14 @@
 pub struct Configuration {
 	#[serde(default)]
 	pub fullscreen: bool,
-	//#[serde(default)]
-	//pub fullscreen_monitor: u32,
+
+	#[serde(default)]
+	pub font: String,
+	
+	#[serde(default = "default_vertex_shader")]
+	pub vert_shader: String,
+	#[serde(default = "default_fragment_shader")]
+	pub frag_shader: String,
 
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub window_position: Option<(f64, f64)>,
@@ -21,13 +27,23 @@ pub struct Configuration {
 }
 
 
+pub fn default_vertex_shader() -> String {
+	String::from("basic.vert")
+}
+
+pub fn default_fragment_shader() -> String {
+	String::from("basic.frag")
+}
+
 
 impl Configuration {
 	// Create a new defaulted Configuration
 	pub fn default() -> Self {
 		Self {
 			fullscreen: false,
-			//fullscreen_monitor: 0,
+			font: String::from("arimo.ttf"),
+			vert_shader: default_vertex_shader(),
+			frag_shader: default_fragment_shader(),
 			window_position: None,
 			debug_mode: false,
 			changed: false,

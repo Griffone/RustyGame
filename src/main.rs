@@ -12,11 +12,19 @@ extern crate serde_yaml;
 #[macro_use]
 extern crate serde_derive;
 
+
 mod config;
+mod graphics;
+
 
 use config::Configuration as Config;
 use glium::{glutin, Surface};
 use std::io;
+
+
+const FONT_PREFIX: &str = "data/fonts/";
+const SHADER_PREFIX: &str = "data/shaders/";
+
 
 #[derive(Debug)]
 struct WindowState {
@@ -43,6 +51,9 @@ fn main() {
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let window = display.gl_window();
 
+		let program = graphics::load_program(&display, &config.vert_shader, &config.frag_shader).unwrap();
+		let (vertex_buffer, index_buffer) = graphics::generate_quad(&display).unwrap();
+
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
@@ -65,9 +76,26 @@ fn main() {
 		set_fullscreen(&window, config.fullscreen, &mut state);
 
 		while !state.closed {
-			let mut target = display.draw();
-			target.clear_color(0.0, 0.0, 1.0, 1.0);
-			target.finish().unwrap();
+			{
+				let mut width_to_height = 1.0f32;
+				if let Some(size) = window.get_inner_size() {
+					width_to_height = size.width as f32 / size.height as f32;
+				}
+
+				let uniforms = uniform! {
+					u_translate: [0.0, 0.0f32],
+					u_z_theta: [0.0, 0.0f32],
+					u_scale: [1.0, width_to_height],
+
+					u_color: [1.0, 1.0, 0.0, 1.0f32],
+				};
+
+				let mut target = display.draw();
+				target.clear_color(0.0, 0.0, 1.0, 1.0);
+				target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &Default::default()).unwrap();
+				target.finish().unwrap();
+			}
+
 
 			events_loop.poll_events(|event| {
 				process_event(&event, &window, &mut state, config.debug_mode);
