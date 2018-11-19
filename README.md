@@ -1,12 +1,14 @@
 # RustyGame
-A hardware-accelerated 2Dish game in Rust.
+A hardware-accelerated 2D* game in Rust.
+
+*refers to aestetics. Both gameplay and graphics might include more dimensions.
 
 ## Goals:
 - [x] Create a window
 - [x] Populate window with OpenGL context
+- [ ] Basic graphics
 - [ ] General file loading
 - [ ] Basic text rendering
-- [ ] SDF font rendering
 - [ ] GUI layouter
 - [ ] Basic input processing
 - [ ] Game scene with controlled objects
