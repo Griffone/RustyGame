@@ -17,8 +17,9 @@ mod config;
 mod graphics;
 
 
-use config::Configuration as Config;
-use glium::{glutin, Surface};
+use config::Configuration;
+use graphics::Graphics;
+use glium::glutin;
 use std::io;
 
 
@@ -34,7 +35,7 @@ struct WindowState {
 }
 
 fn main() {
-	let mut config = Config::load_or_default("config.yml").unwrap();
+	let mut config = Configuration::load_or_default(std::path::Path::new("config.yml"));
 
 	if config.debug_mode {
 		println!("Loaded config: {:?}", config);
@@ -49,10 +50,8 @@ fn main() {
 			.with_dimensions((800.0, 600.0).into());
 		let context_builder = glutin::ContextBuilder::new().with_vsync(true);
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
-		let window = display.gl_window();
-
-		let program = graphics::load_program(&display, &config.vert_shader, &config.frag_shader).unwrap();
-		let (vertex_buffer, index_buffer) = graphics::generate_quad(&display).unwrap();
+		let graphics = Graphics::new(display, &config).unwrap();
+		let window = graphics.window();
 
 		let mut state = WindowState {
 			fullscreen: false,
@@ -76,26 +75,7 @@ fn main() {
 		set_fullscreen(&window, config.fullscreen, &mut state);
 
 		while !state.closed {
-			{
-				let mut width_to_height = 1.0f32;
-				if let Some(size) = window.get_inner_size() {
-					width_to_height = size.width as f32 / size.height as f32;
-				}
-
-				let uniforms = uniform! {
-					u_translate: [0.0, 0.0f32],
-					u_z_theta: [0.0, 0.0f32],
-					u_scale: [1.0, width_to_height],
-
-					u_color: [1.0, 1.0, 0.0, 1.0f32],
-				};
-
-				let mut target = display.draw();
-				target.clear_color(0.0, 0.0, 1.0, 1.0);
-				target.draw(&vertex_buffer, &index_buffer, &program, &uniforms, &Default::default()).unwrap();
-				target.finish().unwrap();
-			}
-
+			graphics.draw();
 
 			events_loop.poll_events(|event| {
 				process_event(&event, &window, &mut state, config.debug_mode);

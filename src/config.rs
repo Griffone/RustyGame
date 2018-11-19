@@ -9,7 +9,7 @@ pub struct Configuration {
 
 	#[serde(default)]
 	pub font: String,
-	
+
 	#[serde(default = "default_vertex_shader")]
 	pub vert_shader: String,
 	#[serde(default = "default_fragment_shader")]
@@ -21,11 +21,9 @@ pub struct Configuration {
 	#[serde(default)]
 	pub debug_mode: bool,
 
-
 	#[serde(skip)]
 	pub changed: bool,
 }
-
 
 pub fn default_vertex_shader() -> String {
 	String::from("basic.vert")
@@ -34,7 +32,6 @@ pub fn default_vertex_shader() -> String {
 pub fn default_fragment_shader() -> String {
 	String::from("basic.frag")
 }
-
 
 impl Configuration {
 	// Create a new defaulted Configuration
@@ -46,22 +43,37 @@ impl Configuration {
 			frag_shader: default_fragment_shader(),
 			window_position: None,
 			debug_mode: false,
-			changed: false,
+			changed: true,
 		}
 	}
 
-	pub fn load_or_default<P: AsRef<std::path::Path>>(path: P) -> Result<Self, Box<std::error::Error>> {
+	pub fn load_or_default(path: &std::path::Path) -> Self {
 		match std::fs::File::open(path) {
 			Ok(file) => {
-				let config = serde_yaml::from_reader(file)?;
-
-				Ok(config)
-			},
-			Err(error) => match error.kind() {
-				std::io::ErrorKind::NotFound => Ok(Self{changed: true, ..Self::default()}),
-				_ => Err(Box::new(error))
+				match serde_yaml::from_reader(file) {
+					Ok(config) => return config, // please note, "changed" field will be false, as thats the defaut bool behavior, but this is at all not obvious
+					Err(error) => {
+						println!("Error interpreting {:#?}:", path);
+						println!("{}", error);
+						let new_path = path.with_file_name("config_old.yml");
+						match std::fs::rename(path, &new_path) {
+							Ok(_) => println!("Renamed {:#?} to {:#?}", path, new_path),
+							Err(error) => {
+								println!("Error renaming {:#?}:", path);
+								println!("{}", error);
+								panic!("failed to rename uninterpreted configuration, please consider renaming {:#?} manually!", path);
+							}
+						}
+					}
+				}
+			}
+			Err(error) => {
+				println!("Error reading {:#?}:", path);
+				println!("{}", error);
 			}
 		}
+		println!("Using default configuration");
+		Self::default()
 	}
 
 	pub fn set_fullscreen(&mut self, enabled: bool) {
@@ -84,13 +96,16 @@ impl Configuration {
 		self.window_position = None;
 	}
 
-	pub fn save_as<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), Box<std::error::Error>> {
+	pub fn save_as<P: AsRef<std::path::Path>>(
+		&self,
+		path: P,
+	) -> Result<(), Box<std::error::Error>> {
 		if self.changed {
 			let string = serde_yaml::to_string(self)?;
 
 			std::fs::write(path, string)?;
 		}
-		
+
 		Ok(())
 	}
 }
