@@ -20,6 +20,10 @@ pub const INSTANCE_COLUMNS: usize = 5 * 16;
 pub const INSTANCE_ROWS: usize = 5 * 9;
 pub const INSTANCE_COUNT: usize = INSTANCE_COLUMNS * INSTANCE_ROWS;
 
+pub const INSTANCED_SHADER: &str = "instanced";
+pub const VERTEX_SHADER_EXTENSHION: &str = ".vert";
+pub const FRAGMENT_SHADER_EXTENSHION: &str = ".frag";
+
 #[derive(Copy, Clone)]
 pub struct Vertex {
 	position: [f32; 2],
@@ -46,7 +50,7 @@ pub struct Graphics {
 
 impl Graphics {
 	pub fn new(display: Display, config: &Configuration) -> Result<Self, GraphicsCreationError> {
-		let program = load_program(&display, &config.vert_shader, &config.frag_shader)?;
+		let program = load_program(&display, &String::from("instanced"))?;
 
 		let (verts, indcs) = generate_quad(&display)?;
 
@@ -210,18 +214,21 @@ fn load_font<'a>(name: &String) -> Result<rusttype::Font<'a>, Box<std::error::Er
 
 fn load_program<F>(
 	facade: &F,
-	vertex_shader_name: &String,
-	fragment_shader_name: &String,
+	shader_name: &str,
 ) -> Result<Program, GraphicsCreationError>
 where
 	F: glium::backend::Facade,
 {
-	let path = String::from(SHADER_PREFIX) + vertex_shader_name;
+	let mut path = String::from(SHADER_PREFIX);
+	path.push_str(shader_name);
+	path.push_str(VERTEX_SHADER_EXTENSHION);
 	let path = Path::new(&path);
 
 	let vertex_shader = std::fs::read_to_string(path)?;
 
-	let path = String::from(SHADER_PREFIX) + fragment_shader_name;
+	let mut path = String::from(SHADER_PREFIX);
+	path.push_str(shader_name);
+	path.push_str(FRAGMENT_SHADER_EXTENSHION);
 	let path = Path::new(&path);
 
 	let fragment_shader = std::fs::read_to_string(path)?;
