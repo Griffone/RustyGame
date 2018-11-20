@@ -1,26 +1,34 @@
 #version 330 core
 
-layout(location = 0) in vec2 position;
-layout(location = 1) in vec2 tex_coords;
+// Per vertex data
+in vec2 position;
+in vec2 tex_coords;
 
-uniform vec2 u_translate; // Includes both world-space and view-space translations
-uniform vec2 u_z_theta; // Screen-space z coordinate and theta angle for rotation
-uniform vec2 u_scale;     // X and Y scale
+// Per instance data
+in vec2 i_translation;
+in vec2 i_z_theta;
+in vec2 i_scale;
+in vec4 i_color;
+
+// Uniform data
+uniform vec2 u_scale;
 
 out vec2 v_tex_coords;
+out vec4 v_color;
 
 void main() {
-    float sinTheta = sin(u_z_theta[1]);
-    float cosTheta = cos(u_z_theta[1]);
+    float sinTheta = sin(i_z_theta[1]);
+    float cosTheta = cos(i_z_theta[1]);
 
     mat2 rotation;
     rotation[0] = vec2(cosTheta, sinTheta);
     rotation[1] = vec2(-sinTheta, cosTheta);
 
     vec2 pos = rotation * position;
-    pos *= u_scale;
-    pos += u_translate;
+    pos *= i_scale * u_scale;
+    pos += i_translation;
 
     v_tex_coords = tex_coords;
-    gl_Position = vec4(pos, u_z_theta[0], 1);
+    v_color = i_color;
+    gl_Position = vec4(pos, i_z_theta[0], 1);
 }

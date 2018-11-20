@@ -27,6 +27,7 @@ use std::io;
 
 const FONT_PREFIX: &str = "data/fonts/";
 const SHADER_PREFIX: &str = "data/shaders/";
+const TEXTURE_PREFIX: &str = "data/textures/";
 
 
 #[derive(Debug)]
@@ -37,6 +38,7 @@ struct WindowState {
 }
 
 fn main() {
+	let start_time = std::time::Instant::now();
 	let mut config = Configuration::load_or_default(std::path::Path::new("config.yml"));
 
 	if config.debug_mode {
@@ -50,7 +52,7 @@ fn main() {
 			.with_title("Rusty Game")
 			.with_min_dimensions((800.0, 600.0).into())
 			.with_dimensions((800.0, 600.0).into());
-		let context_builder = glutin::ContextBuilder::new().with_vsync(true);
+		let context_builder = glutin::ContextBuilder::new().with_vsync(false);
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let graphics = Graphics::new(display, &config).unwrap();
 		let window = graphics.window();
@@ -79,19 +81,41 @@ fn main() {
 		set_fullscreen(&window, config.fullscreen, &mut state);
 
 		let begin = std::time::Instant::now();
+		let mut max_frametime = std::time::Duration::from_secs(0);
+		let mut min_frametime = std::time::Duration::from_secs(1000);
 		let mut frames = 0;
+
+		if config.debug_mode {
+			println!("Loaded in {:#?}", std::time::Instant::now().duration_since(start_time));
+		}
+
 		while !state.closed {
-			t += 0.01;
-			graphics.draw(t);
+			let frame_start = std::time::Instant::now();
+
+			graphics.draw();
+
+			let frametime = std::time::Instant::now().duration_since(frame_start);
 			frames += 1;
+			if frametime > max_frametime {
+				max_frametime = frametime;
+			}
+			if frametime < min_frametime {
+				min_frametime = frametime;
+			}
 
 			events_loop.poll_events(|event| {
 				process_event(&event, &window, &mut state, config.debug_mode);
 			});
 		}
-		let duration = std::time::Instant::now().duration_since(begin);
-		let frame_rate = frames / duration.as_secs();
-		println!("Produces {} frames over {:#?}, resuling in {} fps", frames, duration, frame_rate);
+
+		if config.debug_mode {
+			let duration = std::time::Instant::now().duration_since(begin);
+			let frame_rate = frames / duration.as_secs();
+			let frametime = (duration.as_secs() as u64 * 1000 + duration.subsec_millis() as u64) / frames;
+			println!("Program ran for {:#?}, produced {} frames", duration, frames);
+			println!("Resulting in avereage frametime: {}ms (avg fps {})", frametime, frame_rate);
+			println!("Max frametime: {:#?}, min frametime: {:#?}", max_frametime, min_frametime);
+		}
 
 		config.set_window_position(state.last_pos);
 		config.set_fullscreen(state.fullscreen);
@@ -100,6 +124,7 @@ fn main() {
 	config.save_as("config.yml").unwrap();
 
 	if config.debug_mode {
+		println!("Total runtime: {:#?}", std::time::Instant::now().duration_since(start_time));
 		println!("Program closing, please press enter to finish!");
 
 		let mut line = String::new();

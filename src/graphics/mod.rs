@@ -1,16 +1,23 @@
 // Module that encopases all accelerated graphical presentation.
 
-use {FONT_PREFIX, SHADER_PREFIX};
-use config::Configuration;
+//mod texture;
 
-use glium::{Display, IndexBuffer, VertexBuffer, Surface};
+use config::Configuration;
+use {FONT_PREFIX, SHADER_PREFIX};
+
 use glium::index::BufferCreationError as IndexBufferCreationError;
 use glium::vertex::BufferCreationError as VertexBufferCreationError;
+use glium::{Display, IndexBuffer, Surface, VertexBuffer};
 
 use glium::program::{Program, ProgramCreationError};
 
-use std::path::Path;
+use std::f32::consts::PI;
 use std::io::Error as IoError;
+use std::path::Path;
+
+const INSTANCE_COLUMNS: usize = 50;
+const INSTANCE_ROWS: usize = 50;
+const INSTANCE_COUNT: usize = INSTANCE_COLUMNS * INSTANCE_ROWS;
 
 #[derive(Copy, Clone)]
 pub struct Vertex {
@@ -20,18 +27,18 @@ pub struct Vertex {
 
 implement_vertex!(Vertex, position, tex_coords);
 
-
 // Graphical context
 //
 // The workhorse of this module. Abstracts away specifics of underlying 3D library calls for the purposes of the project.
 pub struct Graphics {
-	display: Display,	// takes ownership of the glium display object
-	program: Program,	// shaders used to draw objects
+	display: Display, // takes ownership of the glium display object
+	program: Program, // shaders used to draw objects
 	// more will be created later
 
 	// temporary variables for testing
 	verts: VertexBuffer<Vertex>,
 	indcs: IndexBuffer<u16>,
+	instances: VertexBuffer<PerInstance>,
 	texture: glium::texture::CompressedSrgbTexture2d,
 }
 
@@ -41,18 +48,30 @@ impl Graphics {
 
 		let (verts, indcs) = generate_quad(&display)?;
 
-		let texture = image::open(std::path::Path::new("data/textures/test.png")).unwrap().to_rgba();
+		let instances = generate_instances(&display)?;
+
+		let texture = image::open(std::path::Path::new("data/textures/test.png"))
+			.unwrap()
+			.to_rgba();
 		let texture_size = texture.dimensions();
-		let texture = glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
+		let texture =
+			glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
 		let texture = glium::texture::CompressedSrgbTexture2d::new(&display, texture).unwrap();
 
-		Ok(Graphics {display: display, program: program, verts: verts, indcs: indcs, texture: texture})
+		Ok(Graphics {
+			display: display,
+			program: program,
+			verts: verts,
+			indcs: indcs,
+			instances: instances,
+			texture: texture,
+		})
 	}
 
-	pub fn draw(&self, rotation: f32) {
+	pub fn draw(&self) {
 		let params = glium::DrawParameters {
 			blend: glium::Blend::alpha_blending(),
-			.. Default::default()
+			..Default::default()
 		};
 
 		let mut width_to_height = 1.0f32;
@@ -60,26 +79,14 @@ impl Graphics {
 			width_to_height = size.width as f32 / size.height as f32;
 		}
 
+		let uniforms = uniform! {
+			u_scale: [1.0, width_to_height],
+			u_texture: &self.texture,
+		};
+
 		let mut target = self.display.draw();
 		target.clear_color(0.0, 0.0, 1.0, 1.0);
-		let x_max = 50;
-		let y_max = 50;
-		let x_step = 2.0 / x_max as f32;
-		let y_step = 2.0 / y_max as f32;
-		for x in 1..x_max {
-			for y in 1..y_max {
-				let uniforms = uniform! {
-					u_translate: [-1.0 + x as f32 * x_step, -1.0 + y as f32 * y_step],
-					u_z_theta: [0.5, rotation],
-					u_scale: [x_step, x_step * width_to_height],
-
-					u_color: [1.0, 1.0, 0.0, 1.0f32],
-					u_texture: &self.texture,
-				};
-
-				target.draw(&self.verts, &self.indcs, &self.program, &uniforms, &params).unwrap();
-			}
-		}
+		target.draw((&self.verts, self.instances.per_instance().unwrap()), &self.indcs, &self.program, &uniforms, &params).unwrap();
 		target.finish().unwrap();
 	}
 
@@ -88,22 +95,33 @@ impl Graphics {
 	}
 }
 
-
 #[derive(Debug)]
 pub enum GraphicsCreationError {
-	Io(IoError),					// Something went wrong trying to load shader files
-	Program(ProgramCreationError),	// Something went wrong trying to compile shaders
-	VertexBuffer(VertexBufferCreationError),	// Something went wrong trying to generate vertices for the quad
-	IndexBuffer(IndexBufferCreationError),		// Something went wrong trying to generate indices for the quad
+	Io(IoError),                   // Something went wrong trying to load shader files
+	Program(ProgramCreationError), // Something went wrong trying to compile shaders
+	VertexBuffer(VertexBufferCreationError), // Something went wrong trying to generate vertices for the quad
+	IndexBuffer(IndexBufferCreationError), // Something went wrong trying to generate indices for the quad
 }
 
 impl std::fmt::Display for GraphicsCreationError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			GraphicsCreationError::Io(error) => { write!(f, "(IO)"); error.fmt(f) }
-			GraphicsCreationError::Program(error) => { write!(f, "(Program)"); error.fmt(f) }
-			GraphicsCreationError::VertexBuffer(error) => { write!(f, "(VertexBuffer)"); error.fmt(f) }
-			GraphicsCreationError::IndexBuffer(error) => { write!(f, "(IndexBuffer)"); error.fmt(f) }
+			GraphicsCreationError::Io(error) => {
+				write!(f, "(IO)");
+				error.fmt(f)
+			}
+			GraphicsCreationError::Program(error) => {
+				write!(f, "(Program)");
+				error.fmt(f)
+			}
+			GraphicsCreationError::VertexBuffer(error) => {
+				write!(f, "(VertexBuffer)");
+				error.fmt(f)
+			}
+			GraphicsCreationError::IndexBuffer(error) => {
+				write!(f, "(IndexBuffer)");
+				error.fmt(f)
+			}
 		}
 	}
 }
@@ -147,7 +165,6 @@ impl From<IndexBufferCreationError> for GraphicsCreationError {
 	}
 }
 
-
 fn load_font<'a>(name: &String) -> Result<rusttype::Font<'a>, Box<std::error::Error>> {
 	let path = String::from(FONT_PREFIX) + name;
 	let path = Path::new(&path);
@@ -189,17 +206,90 @@ where
 	let vertex_buffer = VertexBuffer::new(
 		facade,
 		&[
-			Vertex { position: [-0.5,  0.5], tex_coords: [0.0, 1.0], },
-			Vertex { position: [-0.5, -0.5], tex_coords: [0.0, 0.0], },
-			Vertex { position: [ 0.5,  0.5], tex_coords: [1.0, 1.0], },
-			Vertex { position: [ 0.5, -0.5], tex_coords: [1.0, 0.0], },
+			Vertex {
+				position: [-0.5, 0.5],
+				tex_coords: [0.0, 1.0],
+			},
+			Vertex {
+				position: [-0.5, -0.5],
+				tex_coords: [0.0, 0.0],
+			},
+			Vertex {
+				position: [0.5, 0.5],
+				tex_coords: [1.0, 1.0],
+			},
+			Vertex {
+				position: [0.5, -0.5],
+				tex_coords: [1.0, 0.0],
+			},
 		],
 	)?;
 	let index_buffer = IndexBuffer::new(
 		facade,
 		glium::index::PrimitiveType::TrianglesList,
-		&[0, 1, 2,  1, 2, 3]
+		&[0, 1, 2, 1, 2, 3],
 	)?;
 
 	Ok((vertex_buffer, index_buffer))
 }
+
+fn generate_instances<F: glium::backend::Facade>(facade: &F) -> Result<VertexBuffer<PerInstance>, VertexBufferCreationError> {
+	let mut instances: Vec<PerInstance> = Vec::with_capacity(INSTANCE_COUNT);
+
+	let x_step = 2.0 / INSTANCE_COLUMNS as f32;
+	let y_step = 2.0 / INSTANCE_ROWS as f32;
+
+	for x in 1..INSTANCE_COLUMNS {
+		for y in 1..INSTANCE_ROWS {
+			instances.push(PerInstance {
+				i_translation: [-1.0 + x_step * x as f32, -1.0 + y_step * y as f32],
+				i_z_theta: [0.5, 0.0],
+				i_scale: [x_step, x_step],
+				i_color: [1.0, 1.0, 1.0, 1.0],
+			});
+		}
+	}
+
+	VertexBuffer::dynamic(facade, &instances)
+}
+
+fn short_angle_distance(a: f32, b: f32) -> f32 {
+	let max = PI * 2.0;
+	let delta = (b - a) % max;
+
+	(2.0 * delta) % max - delta
+}
+
+pub fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
+	a + short_angle_distance(a, b) * t
+}
+
+#[inline]
+pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
+	a * (1.0 - t) + b * t
+}
+
+#[inline]
+pub fn lerp_vec2(a: &[f32; 2], b: &[f32; 2], t: f32) -> [f32; 2] {
+	[lerp(a[0], b[0], t), lerp(a[1], b[1], t)]
+}
+
+#[inline]
+pub fn lerp_vec4(a: &[f32; 4], b: &[f32; 4], t: f32) -> [f32; 4] {
+	[
+		lerp(a[0], b[0], t),
+		lerp(a[1], b[1], t),
+		lerp(a[2], b[2], t),
+		lerp(a[3], b[3], t),
+	]
+}
+
+// A PerInstance structure that used similar to a uniform
+#[derive(Copy, Clone, Default)]
+struct PerInstance {
+	i_translation: [f32; 2],	// Translation in world space
+	i_z_theta: [f32; 2],		// Z-order and angle of rotation around origin in radians
+	i_scale: [f32; 2],			// Scaling of the object in world space
+	i_color: [f32; 4],			// The color of the object
+}
+implement_vertex!(PerInstance, i_translation, i_z_theta, i_scale, i_color);
