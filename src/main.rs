@@ -57,8 +57,6 @@ fn main() {
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let mut graphics = Graphics::new(display, &config).unwrap();
 
-		let mut t = 0.0;
-
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,

@@ -64,7 +64,7 @@ impl Graphics {
 
 		let mut rng = rand::thread_rng();
 
-		for i in 1..INSTANCE_COUNT {
+		for _ in 0..INSTANCE_COUNT {
 			rotations.push(rng.gen_range(-1.0, 1.0));
 		}
 
@@ -97,8 +97,8 @@ impl Graphics {
 		}
 
 		// Calculate the necessary scaling
-		let mut scaling = 2.0 / (INSTANCE_COLUMNS - 1) as f32;
-		let y_scaling = 2.0 / width_to_height / (INSTANCE_ROWS - 1) as f32;
+		let mut scaling = 2.0 / (INSTANCE_COLUMNS) as f32;
+		let y_scaling = 2.0 / width_to_height / (INSTANCE_ROWS) as f32;
 		
 		if scaling > y_scaling {
 			scaling = y_scaling;
@@ -269,13 +269,13 @@ where
 fn generate_instances<F: glium::backend::Facade>(facade: &F) -> Result<VertexBuffer<PerInstance>, VertexBufferCreationError> {
 	let mut instances: Vec<PerInstance> = Vec::with_capacity(INSTANCE_COUNT);
 
-	let x_begin = INSTANCE_COLUMNS as f32 / -2.0;
-	let y_begin = INSTANCE_ROWS as f32 / -2.0;
+	let x_begin = INSTANCE_COLUMNS as f32 / -2.0 + 0.5;
+	let y_begin = INSTANCE_ROWS as f32 / -2.0 + 0.5;
 
 	let mut rng = rand::thread_rng();
 
-	for x in 1..INSTANCE_COLUMNS {
-		for y in 1..INSTANCE_ROWS {
+	for x in 0..INSTANCE_COLUMNS {
+		for y in 0..INSTANCE_ROWS {
 			instances.push(PerInstance {
 				i_translation: [x_begin + x as f32, y_begin + y as f32],
 				i_z_theta: [rng.gen(), rng.gen()],
