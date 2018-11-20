@@ -11,7 +11,8 @@ in vec2 i_scale;
 in vec4 i_color;
 
 // Uniform data
-uniform vec2 u_scale;
+uniform vec2 u_scale;       // camera screen-space transformations
+uniform vec2 u_translation;
 
 out vec2 v_tex_coords;
 out vec4 v_color;
@@ -25,8 +26,10 @@ void main() {
     rotation[1] = vec2(-sinTheta, cosTheta);
 
     vec2 pos = rotation * position;
-    pos *= i_scale * u_scale;
+    pos *= i_scale;
     pos += i_translation;
+    pos *= u_scale;
+    pos += u_translation;
 
     v_tex_coords = tex_coords;
     v_color = i_color;

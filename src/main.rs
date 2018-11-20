@@ -12,6 +12,7 @@ extern crate serde_yaml;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate rand;
 extern crate image;	// For loading texture files
 
 
@@ -54,8 +55,7 @@ fn main() {
 			.with_dimensions((800.0, 600.0).into());
 		let context_builder = glutin::ContextBuilder::new().with_vsync(false);
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
-		let graphics = Graphics::new(display, &config).unwrap();
-		let window = graphics.window();
+		let mut graphics = Graphics::new(display, &config).unwrap();
 
 		let mut t = 0.0;
 
@@ -65,34 +65,43 @@ fn main() {
 			last_pos: (0.0, 0.0),
 		};
 		if let Some(position) = config.window_position {
-			window.set_position(position.into());
+			graphics.window().set_position(position.into());
 			state.last_pos = position;
 		}
 		
 		// Sleep for up to 20 milliseconds to let the window reposition
 		for _ in 1..20 {
-			if let Some(position) = window.get_position() {
+			if let Some(position) = graphics.window().get_position() {
 				if state.last_pos == position.into() {
 					break;
 				}
 			}
 			std::thread::sleep(std::time::Duration::from_millis(1));
 		}
-		set_fullscreen(&window, config.fullscreen, &mut state);
+		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
 		let begin = std::time::Instant::now();
 		let mut max_frametime = std::time::Duration::from_secs(0);
 		let mut min_frametime = std::time::Duration::from_secs(1000);
 		let mut frames = 0;
 
+		let mut last_frame_start = std::time::Instant::now();
+
 		if config.debug_mode {
 			println!("Loaded in {:#?}", std::time::Instant::now().duration_since(start_time));
+			println!("Drawing {}x{}={} instances", graphics::INSTANCE_COLUMNS, graphics::INSTANCE_ROWS, graphics::INSTANCE_COUNT);
 		}
 
 		while !state.closed {
 			let frame_start = std::time::Instant::now();
+			let deltatime = frame_start.duration_since(last_frame_start);
+			last_frame_start = frame_start;
 
-			graphics.draw();
+			graphics.draw(deltatime.subsec_micros() as f32 / 1000000.0);
+
+			events_loop.poll_events(|event| {
+				process_event(&event, &graphics.window(), &mut state, config.debug_mode);
+			});
 
 			let frametime = std::time::Instant::now().duration_since(frame_start);
 			frames += 1;
@@ -102,18 +111,14 @@ fn main() {
 			if frametime < min_frametime {
 				min_frametime = frametime;
 			}
-
-			events_loop.poll_events(|event| {
-				process_event(&event, &window, &mut state, config.debug_mode);
-			});
 		}
 
 		if config.debug_mode {
 			let duration = std::time::Instant::now().duration_since(begin);
 			let frame_rate = frames / duration.as_secs();
-			let frametime = (duration.as_secs() as u64 * 1000 + duration.subsec_millis() as u64) / frames;
+			let frametime = duration / frames as u32;
 			println!("Program ran for {:#?}, produced {} frames", duration, frames);
-			println!("Resulting in avereage frametime: {}ms (avg fps {})", frametime, frame_rate);
+			println!("Resulting in avereage frametime: {:#?} (avg fps {})", frametime, frame_rate);
 			println!("Max frametime: {:#?}, min frametime: {:#?}", max_frametime, min_frametime);
 		}
 

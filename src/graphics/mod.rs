@@ -8,16 +8,17 @@ use {FONT_PREFIX, SHADER_PREFIX};
 use glium::index::BufferCreationError as IndexBufferCreationError;
 use glium::vertex::BufferCreationError as VertexBufferCreationError;
 use glium::{Display, IndexBuffer, Surface, VertexBuffer};
-
 use glium::program::{Program, ProgramCreationError};
+
+use rand::Rng;
 
 use std::f32::consts::PI;
 use std::io::Error as IoError;
 use std::path::Path;
 
-const INSTANCE_COLUMNS: usize = 50;
-const INSTANCE_ROWS: usize = 50;
-const INSTANCE_COUNT: usize = INSTANCE_COLUMNS * INSTANCE_ROWS;
+pub const INSTANCE_COLUMNS: usize = 5 * 16;
+pub const INSTANCE_ROWS: usize = 5 * 9;
+pub const INSTANCE_COUNT: usize = INSTANCE_COLUMNS * INSTANCE_ROWS;
 
 #[derive(Copy, Clone)]
 pub struct Vertex {
@@ -40,6 +41,7 @@ pub struct Graphics {
 	indcs: IndexBuffer<u16>,
 	instances: VertexBuffer<PerInstance>,
 	texture: glium::texture::CompressedSrgbTexture2d,
+	rotation_speeds: Vec<f32>,
 }
 
 impl Graphics {
@@ -58,6 +60,14 @@ impl Graphics {
 			glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
 		let texture = glium::texture::CompressedSrgbTexture2d::new(&display, texture).unwrap();
 
+		let mut rotations = Vec::with_capacity(INSTANCE_COUNT);
+
+		let mut rng = rand::thread_rng();
+
+		for i in 1..INSTANCE_COUNT {
+			rotations.push(rng.gen_range(-1.0, 1.0));
+		}
+
 		Ok(Graphics {
 			display: display,
 			program: program,
@@ -65,27 +75,50 @@ impl Graphics {
 			indcs: indcs,
 			instances: instances,
 			texture: texture,
+			rotation_speeds: rotations,
 		})
 	}
 
-	pub fn draw(&self) {
+	pub fn draw(&mut self, deltatime: f32) {
 		let params = glium::DrawParameters {
+			depth: glium::Depth {
+				test: glium::DepthTest::IfLess,
+				write: true,
+				..Default::default()
+			},
 			blend: glium::Blend::alpha_blending(),
 			..Default::default()
 		};
 
+		// Preserve aspect ratio of the world-space
 		let mut width_to_height = 1.0f32;
 		if let Some(size) = self.display.gl_window().get_inner_size() {
 			width_to_height = size.width as f32 / size.height as f32;
 		}
 
+		// Calculate the necessary scaling
+		let mut scaling = 2.0 / (INSTANCE_COLUMNS - 1) as f32;
+		let y_scaling = 2.0 / width_to_height / (INSTANCE_ROWS - 1) as f32;
+		
+		if scaling > y_scaling {
+			scaling = y_scaling;
+		}
+
 		let uniforms = uniform! {
-			u_scale: [1.0, width_to_height],
+			u_scale: [scaling, width_to_height * scaling],
+			u_translation: [0.0, 0.0f32],
 			u_texture: &self.texture,
 		};
 
+		{
+			let mut mapping = self.instances.map();
+			for (src, dest) in self.rotation_speeds.iter().zip(mapping.iter_mut()) {
+				dest.i_z_theta[1] = (dest.i_z_theta[1] + deltatime * src) % (2.0 * PI);
+			}
+		}
+
 		let mut target = self.display.draw();
-		target.clear_color(0.0, 0.0, 1.0, 1.0);
+		target.clear_color_and_depth((0.0, 0.0, 1.0, 1.0), 1.0);
 		target.draw((&self.verts, self.instances.per_instance().unwrap()), &self.indcs, &self.program, &uniforms, &params).unwrap();
 		target.finish().unwrap();
 	}
@@ -236,16 +269,18 @@ where
 fn generate_instances<F: glium::backend::Facade>(facade: &F) -> Result<VertexBuffer<PerInstance>, VertexBufferCreationError> {
 	let mut instances: Vec<PerInstance> = Vec::with_capacity(INSTANCE_COUNT);
 
-	let x_step = 2.0 / INSTANCE_COLUMNS as f32;
-	let y_step = 2.0 / INSTANCE_ROWS as f32;
+	let x_begin = INSTANCE_COLUMNS as f32 / -2.0;
+	let y_begin = INSTANCE_ROWS as f32 / -2.0;
+
+	let mut rng = rand::thread_rng();
 
 	for x in 1..INSTANCE_COLUMNS {
 		for y in 1..INSTANCE_ROWS {
 			instances.push(PerInstance {
-				i_translation: [-1.0 + x_step * x as f32, -1.0 + y_step * y as f32],
-				i_z_theta: [0.5, 0.0],
-				i_scale: [x_step, x_step],
-				i_color: [1.0, 1.0, 1.0, 1.0],
+				i_translation: [x_begin + x as f32, y_begin + y as f32],
+				i_z_theta: [rng.gen(), rng.gen()],
+				i_scale: [1.0, 1.0],
+				i_color: [rng.gen(), rng.gen(), rng.gen(), rng.gen_range(0.5, 1.0)],
 			});
 		}
 	}
