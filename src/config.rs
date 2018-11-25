@@ -9,9 +9,13 @@ pub struct Configuration {
 
 	#[serde(default)]
 	pub font: String,
+	#[serde(default = "default_batch_size")]
+	pub batch_size: usize,
 
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub window_position: Option<(f64, f64)>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub window_size: Option<(f64, f64)>,
 
 	#[serde(default)]
 	pub debug_mode: bool,
@@ -20,18 +24,26 @@ pub struct Configuration {
 	pub changed: bool,
 }
 
-impl Configuration {
+fn default_batch_size() -> usize {
+	1024
+}
+
+impl Default for Configuration {
 	// Create a new defaulted Configuration
-	pub fn default() -> Self {
+	fn default() -> Self {
 		Self {
 			fullscreen: false,
 			font: String::from("arimo.ttf"),
+			batch_size: default_batch_size(),
 			window_position: None,
+			window_size: None,
 			debug_mode: false,
 			changed: true,
 		}
 	}
+}
 
+impl Configuration {
 	pub fn load_or_default(path: &std::path::Path) -> Self {
 		match std::fs::File::open(path) {
 			Ok(file) => {
@@ -79,6 +91,16 @@ impl Configuration {
 	pub fn reset_window_position(&mut self) {
 		self.changed = self.changed || self.window_position != None;
 		self.window_position = None;
+	}
+
+	pub fn set_window_size(&mut self, window_size: (f64, f64)) {
+		self.changed = self.changed || self.window_size != Some(window_size);
+		self.window_size = Some(window_size);
+	}
+
+	pub fn reset_window_size(&mut self) {
+		self.changed = self.changed || self.window_size != None;
+		self.window_size = None;
 	}
 
 	pub fn save_as<P: AsRef<std::path::Path>>(

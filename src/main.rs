@@ -30,17 +30,23 @@ const FONT_PREFIX: &str = "data/fonts/";
 const SHADER_PREFIX: &str = "data/shaders/";
 const TEXTURE_PREFIX: &str = "data/textures/";
 
+const CONFIG_NAME: &str = "config.yml";
+
+const WINDOW_MIN_SIZE: (f64, f64) = (800.0, 600.0);
+const WINDOW_DEFAULT_SIZE: (f64, f64) = (800.0, 600.0);
+
 
 #[derive(Debug)]
 struct WindowState {
 	fullscreen: bool,
 	closed: bool,
 	last_pos: (f64, f64),
+	last_size: (f64, f64),
 }
 
 fn main() {
 	let start_time = std::time::Instant::now();
-	let mut config = Configuration::load_or_default(std::path::Path::new("config.yml"));
+	let mut config = Configuration::load_or_default(std::path::Path::new(CONFIG_NAME));
 
 	if config.debug_mode {
 		println!("Loaded config: {:?}", config);
@@ -48,54 +54,64 @@ fn main() {
 
 	// Use inside scope to close the window just before the program end.
 	{
-		let mut events_loop = glutin::EventsLoop::new();
-		let window_builder = glutin::WindowBuilder::new()
-			.with_title("Rusty Game")
-			.with_min_dimensions((800.0, 600.0).into())
-			.with_dimensions((800.0, 600.0).into());
-		let context_builder = glutin::ContextBuilder::new().with_vsync(false);
-		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
-		let mut graphics = Graphics::new(display, &config).unwrap();
-
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
 			last_pos: (0.0, 0.0),
+			last_size: WINDOW_DEFAULT_SIZE,
 		};
+
+		if let Some(size) = config.window_size {
+			state.last_size = size;
+		}
+
+		let mut events_loop = glutin::EventsLoop::new();
+		let window_builder = glutin::WindowBuilder::new()
+			.with_title("Rusty Game")
+			.with_min_dimensions(WINDOW_MIN_SIZE.into())
+			.with_dimensions(state.last_size.into());
+		let context_builder = glutin::ContextBuilder::new().with_vsync(false);
+		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
+		let mut graphics = Graphics::new(display, &config).unwrap();
+
 		if let Some(position) = config.window_position {
 			graphics.window().set_position(position.into());
 			state.last_pos = position;
+
+			// Sleep for up to 20 milliseconds to let the window reposition
+			for _ in 1..20 {
+				if let Some(position) = graphics.window().get_position() {
+					if state.last_pos == position.into() {
+						break;
+					}
+				}
+				std::thread::sleep(std::time::Duration::from_millis(1));
+			}
 		}
 		
-		// Sleep for up to 20 milliseconds to let the window reposition
-		for _ in 1..20 {
-			if let Some(position) = graphics.window().get_position() {
-				if state.last_pos == position.into() {
-					break;
-				}
-			}
-			std::thread::sleep(std::time::Duration::from_millis(1));
-		}
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
+		let columns = 5*16;
+		let rows = 5*9;
+		let instance_count = columns * rows;
+		let mut scene = graphics::scene::TestScene::generate(columns, rows);
+
+		if config.debug_mode {
+			println!("Loaded in {:#?}", std::time::Instant::now().duration_since(start_time));
+			println!("Drawing {}x{}={} instances in {} batches", columns, rows, instance_count, (instance_count as f32 / config.batch_size as f32).ceil() as i32);
+		}
+
+		
 		let begin = std::time::Instant::now();
 		let mut max_frametime = std::time::Duration::from_secs(0);
 		let mut min_frametime = std::time::Duration::from_secs(1000);
 		let mut frames = 0;
 
-		let mut last_frame_start = std::time::Instant::now();
-
-		if config.debug_mode {
-			println!("Loaded in {:#?}", std::time::Instant::now().duration_since(start_time));
-			println!("Drawing {}x{}={} instances", graphics::INSTANCE_COLUMNS, graphics::INSTANCE_ROWS, graphics::INSTANCE_COUNT);
-		}
-
 		while !state.closed {
 			let frame_start = std::time::Instant::now();
-			let deltatime = frame_start.duration_since(last_frame_start);
-			last_frame_start = frame_start;
 
-			graphics.draw(deltatime.subsec_micros() as f32 / 1000000.0);
+			scene.update();
+			graphics.draw(&scene);
 
 			events_loop.poll_events(|event| {
 				process_event(&event, &graphics.window(), &mut state, config.debug_mode);
@@ -108,6 +124,10 @@ fn main() {
 			}
 			if frametime < min_frametime {
 				min_frametime = frametime;
+			}
+
+			if std::time::Instant::now().duration_since(begin) >= std::time::Duration::from_secs(30) {
+				state.closed = true;
 			}
 		}
 
@@ -122,9 +142,10 @@ fn main() {
 
 		config.set_window_position(state.last_pos);
 		config.set_fullscreen(state.fullscreen);
+		config.set_window_size(state.last_size);
 	}
 
-	config.save_as("config.yml").unwrap();
+	config.save_as(CONFIG_NAME).unwrap();
 
 	if config.debug_mode {
 		println!("Total runtime: {:#?}", std::time::Instant::now().duration_since(start_time));
@@ -137,16 +158,16 @@ fn main() {
 	}
 }
 
-fn remember_position(window: &glutin::GlWindow, state: &mut WindowState) {
-	state.last_pos = match window.get_position() {
-		Some(position) => position.into(),
-		None => (0.0, 0.0),
-	};
-}
-
 fn set_fullscreen(window: &glutin::GlWindow, fullscreen: bool, state: &mut WindowState) {
 	if fullscreen {
-		remember_position(window, state);
+		state.last_pos = match window.get_position() {
+			Some(position) => position.into(),
+			None => (0.0, 0.0),
+		};
+		state.last_size = match window.get_inner_size() {
+			Some(size) => size.into(),
+			None => WINDOW_DEFAULT_SIZE,
+		};
 		window.set_fullscreen(Some(window.get_current_monitor()));
 	} else {
 		window.set_fullscreen(None);
@@ -185,7 +206,12 @@ fn process_event(
 				if !state.fullscreen {
 					state.last_pos = (position.x, position.y);
 				}
-			}
+			},
+			glutin::WindowEvent::Resized(size) => {
+				if !state.fullscreen {
+					state.last_size = (size.width, size.height);
+				}
+			},
 			_ => (),
 		},
 		_ => (),

@@ -27,9 +27,8 @@ void main() {
 
     vec2 pos = rotation * position;
     pos *= i_scale;
-    pos += i_translation;
+    pos += i_translation - u_translation;
     pos *= u_scale;
-    pos += u_translation;
 
     v_tex_coords = tex_coords;
     v_color = i_color;
