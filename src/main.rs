@@ -41,6 +41,7 @@ struct WindowState {
 	last_pos: (f64, f64),
 	last_size: (f64, f64),
 	window_size: (f64, f64),
+	change_size: i8,
 }
 
 fn main() {
@@ -53,6 +54,8 @@ fn main() {
 
 	// Use inside scope to close the window just before the program end.
 	{
+		let mut count: i8 = 3;
+
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
@@ -61,6 +64,7 @@ fn main() {
 			last_pos: (0.0, 0.0),
 			window_size: WINDOW_DEFAULT_SIZE,
 			last_size: WINDOW_DEFAULT_SIZE,
+			change_size: 0,
 		};
 
 		if let Some(size) = config.window_size {
@@ -93,8 +97,8 @@ fn main() {
 
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
-		let columns = 1 * 16;
-		let rows = 1 * 9;
+		let columns = count as u32 * 16;
+		let rows = count as u32 * 9;
 		let instance_count = columns * rows;
 		let mut scene = graphics::scene::TestScene::generate(columns, rows);
 
@@ -120,10 +124,33 @@ fn main() {
 		while !state.closed {
 			let frame_start = std::time::Instant::now();
 
+			if state.change_size != 0 {
+				count += state.change_size;
+				if count < 0 {
+					count = 0;
+				}
+				if count == 0 {
+					scene = graphics::scene::TestScene::generate(1, 1);
+				} else {
+					let columns = count as u32 * 16;
+					let rows = count as u32 * 9;
+					let instance_count = columns * rows;
+					scene = graphics::scene::TestScene::generate(columns, rows);
+
+					println!(
+						"Drawing {}x{}={} instances in {} batches",
+						columns,
+						rows,
+						instance_count,
+						(instance_count as f32 / config.batch_size as f32).ceil() as i32
+					);
+				}
+				state.change_size = 0;
+			}
 			scene.update();
 			let mouse = [(state.mouse_pos.0 / state.window_size.0) as f32, (state.mouse_pos.1 / state.window_size.1) as f32];
 			scene.view_origin = graphics.screen_to_world(mouse, &scene);
-			scene.view_distance += state.wheel_delta * 0.2;
+			scene.view_distance *= 1.0 + state.wheel_delta / 8.0;
 			state.wheel_delta = 0.0;
 			graphics.draw(&scene);
 
@@ -238,10 +265,17 @@ fn process_event(
 			glutin::WindowEvent::CursorMoved {position, ..} => {
 				state.mouse_pos = (position.x, position.y);
 			},
-			glutin::WindowEvent::MouseWheel {delta, ..} => {
-				match delta {
-					glutin::MouseScrollDelta::LineDelta(_, delta) => state.wheel_delta = *delta,
-					glutin::MouseScrollDelta::PixelDelta(delta) => state.wheel_delta = delta.y as f32,
+			glutin::WindowEvent::MouseWheel {delta, modifiers, ..} => {
+				if modifiers.alt {
+					match delta {
+						glutin::MouseScrollDelta::LineDelta(_, delta) => state.change_size = *delta as i8,
+						glutin::MouseScrollDelta::PixelDelta(delta) => state.change_size = delta.y as i8,
+					}
+				} else {
+					match delta {
+						glutin::MouseScrollDelta::LineDelta(_, delta) => state.wheel_delta = *delta,
+						glutin::MouseScrollDelta::PixelDelta(delta) => state.wheel_delta = delta.y as f32,
+					}
 				}
 			}
 			other => {
