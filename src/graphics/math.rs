@@ -3,8 +3,8 @@ pub use std::f32::consts::PI;
 
 pub const MAX_ROTATION: f32 = PI * 2.0;
 
-type Point = [f32; 2];
-type Bounds = Vec<Point>;
+pub type Point = [f32; 2];
+pub type Bounds = Vec<Point>;
 
 /// Linearly interpolateable
 pub trait Lerp {

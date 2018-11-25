@@ -8,6 +8,9 @@ pub struct Configuration {
 	pub fullscreen: bool,
 
 	#[serde(default)]
+	pub vsync: bool,
+
+	#[serde(default)]
 	pub font: String,
 	#[serde(default = "default_batch_size")]
 	pub batch_size: usize,
@@ -33,6 +36,7 @@ impl Default for Configuration {
 	fn default() -> Self {
 		Self {
 			fullscreen: false,
+			vsync: true,
 			font: String::from("arimo.ttf"),
 			batch_size: default_batch_size(),
 			window_position: None,

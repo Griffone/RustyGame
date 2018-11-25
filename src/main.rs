@@ -12,19 +12,16 @@ extern crate serde_yaml;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate rand;
-extern crate image;	// For loading texture files
-
+extern crate image;
+extern crate rand; // For loading texture files
 
 mod config;
 mod graphics;
 
-
 use config::Configuration;
-use graphics::Graphics;
 use glium::glutin;
+use graphics::Graphics;
 use std::io;
-
 
 const FONT_PREFIX: &str = "data/fonts/";
 const SHADER_PREFIX: &str = "data/shaders/";
@@ -35,13 +32,15 @@ const CONFIG_NAME: &str = "config.yml";
 const WINDOW_MIN_SIZE: (f64, f64) = (800.0, 600.0);
 const WINDOW_DEFAULT_SIZE: (f64, f64) = (800.0, 600.0);
 
-
 #[derive(Debug)]
 struct WindowState {
 	fullscreen: bool,
 	closed: bool,
+	mouse_pos: (f64, f64),
+	wheel_delta: f32,
 	last_pos: (f64, f64),
 	last_size: (f64, f64),
+	window_size: (f64, f64),
 }
 
 fn main() {
@@ -57,7 +56,10 @@ fn main() {
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
+			mouse_pos: (0.0, 0.0),
+			wheel_delta: 0.0,
 			last_pos: (0.0, 0.0),
+			window_size: WINDOW_DEFAULT_SIZE,
 			last_size: WINDOW_DEFAULT_SIZE,
 		};
 
@@ -70,7 +72,7 @@ fn main() {
 			.with_title("Rusty Game")
 			.with_min_dimensions(WINDOW_MIN_SIZE.into())
 			.with_dimensions(state.last_size.into());
-		let context_builder = glutin::ContextBuilder::new().with_vsync(false);
+		let context_builder = glutin::ContextBuilder::new().with_vsync(config.vsync);
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let mut graphics = Graphics::new(display, &config).unwrap();
 
@@ -88,20 +90,28 @@ fn main() {
 				std::thread::sleep(std::time::Duration::from_millis(1));
 			}
 		}
-		
+
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
-		let columns = 5*16;
-		let rows = 5*9;
+		let columns = 1 * 16;
+		let rows = 1 * 9;
 		let instance_count = columns * rows;
 		let mut scene = graphics::scene::TestScene::generate(columns, rows);
 
 		if config.debug_mode {
-			println!("Loaded in {:#?}", std::time::Instant::now().duration_since(start_time));
-			println!("Drawing {}x{}={} instances in {} batches", columns, rows, instance_count, (instance_count as f32 / config.batch_size as f32).ceil() as i32);
+			println!(
+				"Loaded in {:#?}",
+				std::time::Instant::now().duration_since(start_time)
+			);
+			println!(
+				"Drawing {}x{}={} instances in {} batches",
+				columns,
+				rows,
+				instance_count,
+				(instance_count as f32 / config.batch_size as f32).ceil() as i32
+			);
 		}
 
-		
 		let begin = std::time::Instant::now();
 		let mut max_frametime = std::time::Duration::from_secs(0);
 		let mut min_frametime = std::time::Duration::from_secs(1000);
@@ -111,6 +121,10 @@ fn main() {
 			let frame_start = std::time::Instant::now();
 
 			scene.update();
+			let mouse = [(state.mouse_pos.0 / state.window_size.0) as f32, (state.mouse_pos.1 / state.window_size.1) as f32];
+			scene.view_origin = graphics.screen_to_world(mouse, &scene);
+			scene.view_distance += state.wheel_delta * 0.2;
+			state.wheel_delta = 0.0;
 			graphics.draw(&scene);
 
 			events_loop.poll_events(|event| {
@@ -125,19 +139,24 @@ fn main() {
 			if frametime < min_frametime {
 				min_frametime = frametime;
 			}
-
-			if std::time::Instant::now().duration_since(begin) >= std::time::Duration::from_secs(30) {
-				state.closed = true;
-			}
 		}
 
 		if config.debug_mode {
 			let duration = std::time::Instant::now().duration_since(begin);
 			let frame_rate = frames / duration.as_secs();
 			let frametime = duration / frames as u32;
-			println!("Program ran for {:#?}, produced {} frames", duration, frames);
-			println!("Resulting in avereage frametime: {:#?} (avg fps {})", frametime, frame_rate);
-			println!("Max frametime: {:#?}, min frametime: {:#?}", max_frametime, min_frametime);
+			println!(
+				"Program ran for {:#?}, produced {} frames",
+				duration, frames
+			);
+			println!(
+				"Resulting in avereage frametime: {:#?} (avg fps {})",
+				frametime, frame_rate
+			);
+			println!(
+				"Max frametime: {:#?}, min frametime: {:#?}",
+				max_frametime, min_frametime
+			);
 		}
 
 		config.set_window_position(state.last_pos);
@@ -148,7 +167,10 @@ fn main() {
 	config.save_as(CONFIG_NAME).unwrap();
 
 	if config.debug_mode {
-		println!("Total runtime: {:#?}", std::time::Instant::now().duration_since(start_time));
+		println!(
+			"Total runtime: {:#?}",
+			std::time::Instant::now().duration_since(start_time)
+		);
 		println!("Program closing, please press enter to finish!");
 
 		let mut line = String::new();
@@ -211,8 +233,22 @@ fn process_event(
 				if !state.fullscreen {
 					state.last_size = (size.width, size.height);
 				}
+				state.window_size = (size.width, size.height);
 			},
-			_ => (),
+			glutin::WindowEvent::CursorMoved {position, ..} => {
+				state.mouse_pos = (position.x, position.y);
+			},
+			glutin::WindowEvent::MouseWheel {delta, ..} => {
+				match delta {
+					glutin::MouseScrollDelta::LineDelta(_, delta) => state.wheel_delta = *delta,
+					glutin::MouseScrollDelta::PixelDelta(delta) => state.wheel_delta = delta.y as f32,
+				}
+			}
+			other => {
+				if debug_mode {
+					println!("Unknown event: {:?}", other)
+				}
+			}
 		},
 		_ => (),
 	}

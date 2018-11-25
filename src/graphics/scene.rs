@@ -1,5 +1,5 @@
 use super::instance::Instance;
-use super::math::{Rect, MAX_ROTATION, PI};
+use super::math::{Rect, MAX_ROTATION, PI, Point};
 use super::transform::Transform;
 
 use rand::Rng;
@@ -11,7 +11,17 @@ pub trait Scene {
 	/// Minimal required view rectangle
 	fn view_rect(&self) -> Rect;
 	/// Should world coordinate ratio be preserved (actual view rectangle might be different from view rectangle to account for viewport ratio)
-	fn preserve_ratio(&self) -> bool;
+	fn preserve_ratio(&self) -> bool {
+		true
+	}
+	/// Origin of the 'looker' object
+	fn view_origin(&self) -> Point {
+		[0.0, 0.0]
+	}
+	/// Visibility distance from view origin
+	fn view_distance(&self) -> f32 {
+		std::f32::INFINITY
+	}
 }
 
 use std::time::Instant;
@@ -22,6 +32,8 @@ pub struct TestScene {
 	pub view_rect: Rect,
 
 	pub rotation_speeds: Vec<f32>,
+	pub view_origin: Point,
+	pub view_distance: f32,
 	last_update: Instant,
 }
 
@@ -34,8 +46,12 @@ impl Scene for TestScene {
 		self.view_rect.clone()
 	}
 
-	fn preserve_ratio(&self) -> bool {
-		true
+	fn view_origin(&self) -> Point {
+		self.view_origin
+	}
+
+	fn view_distance(&self) -> f32 {
+		self.view_distance
 	}
 }
 
@@ -67,6 +83,8 @@ impl TestScene {
 			),
 			rotation_speeds: rotations,
 			last_update: Instant::now(),
+			view_distance: ((columns * rows) as f32).powf(1.0 / 4.0),
+			view_origin: [0.0, 0.0],
 		}
 	}
 

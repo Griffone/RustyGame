@@ -27,6 +27,7 @@ pub struct Graphics {
 	batch_size: usize,
 
 	texture: glium::texture::CompressedSrgbTexture2d,
+	dark: glium::texture::CompressedSrgbTexture2d,
 }
 
 impl Graphics {
@@ -46,6 +47,11 @@ impl Graphics {
 			glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
 		let texture = glium::texture::CompressedSrgbTexture2d::new(&display, texture).unwrap();
 
+		let dark = image::open(std::path::Path::new("data/textures/dark.png")).unwrap().to_rgba();
+		let texture_size = dark.dimensions();
+		let dark = glium::texture::RawImage2d::from_raw_rgba_reversed(&dark.into_raw(), texture_size);
+		let dark = glium::texture::CompressedSrgbTexture2d::new(&display, dark).unwrap();
+
 		Ok(Graphics {
 			display: display,
 			program: program,
@@ -54,6 +60,7 @@ impl Graphics {
 			instance_buffer: instances,
 			batch_size: batch_size,
 			texture: texture,
+			dark: dark,
 		})
 	}
 
@@ -75,9 +82,8 @@ impl Graphics {
 		}
 
 		let view_rect = scene.view_rect();
-		let scale;
 
-		if scene.preserve_ratio() {
+		let scale = if scene.preserve_ratio() {
 			// Calculate the necessary scaling
 			let mut scaling = 2.0 / view_rect.width();
 			let y_scaling = 2.0 / width_to_height / view_rect.height();
@@ -86,15 +92,18 @@ impl Graphics {
 				scaling = y_scaling;
 			}
 
-			scale = [scaling, width_to_height * scaling];
+			[scaling, width_to_height * scaling]
 		} else {
-			scale = [2.0 / view_rect.width(), 2.0 / view_rect.height()];
-		}
+			[2.0 / view_rect.width(), 2.0 / view_rect.height()]
+		};
 
 		let uniforms = uniform! {
 			u_scale: scale,
 			u_translation: view_rect.center(),
+			u_eye: scene.view_origin(),
+			u_see_dist: scene.view_distance(),
 			u_texture: &self.texture,
+			u_dark: &self.dark,
 		};
 
 		let mut target = self.display.draw();
@@ -132,6 +141,29 @@ impl Graphics {
 
 	pub fn window(&self) -> core::cell::Ref<glium::glutin::GlWindow> {
 		self.display.gl_window()
+	}
+
+	pub fn screen_to_world<T: Scene>(&self, normalized_screen: super::math::Point, scene: &T) -> super::math::Point {
+		let mut width_to_height = 1.0f32;
+		if let Some(size) = self.display.gl_window().get_inner_size() {
+			width_to_height = size.width as f32 / size.height as f32;
+		}
+		let view_rect = scene.view_rect();
+		let scale = if scene.preserve_ratio() {
+			// Calculate the necessary scaling
+			let mut scaling = 1.0 / view_rect.width();
+			let y_scaling = 1.0 / width_to_height / view_rect.height();
+
+			if scaling > y_scaling {
+				scaling = y_scaling;
+			}
+
+			[scaling, width_to_height * scaling]
+		} else {
+			[1.0 / view_rect.width(), 1.0 / view_rect.height()]
+		};
+
+		[normalized_screen[0] / scale[0] + view_rect.min_x(), (1.0 - normalized_screen[1]) / scale[1] + view_rect.min_y()]
 	}
 }
 

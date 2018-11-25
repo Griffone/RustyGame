@@ -14,8 +14,11 @@ in vec4 i_color;
 uniform vec2 u_scale;       // camera screen-space transformations
 uniform vec2 u_translation;
 
+//uniform vec2 u_eye;
+
 out vec2 v_tex_coords;
 out vec4 v_color;
+out vec2 v_pos;
 
 void main() {
     float sinTheta = sin(i_z_theta[1]);
@@ -27,7 +30,11 @@ void main() {
 
     vec2 pos = rotation * position;
     pos *= i_scale;
-    pos += i_translation - u_translation;
+
+    pos += i_translation;
+    v_pos = pos;
+
+    pos -= u_translation;
     pos *= u_scale;
 
     v_tex_coords = tex_coords;
