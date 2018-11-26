@@ -1,6 +1,7 @@
 use super::instance::Instance;
 use super::math::{Rect, MAX_ROTATION, PI, Point};
 use super::transform::Transform;
+use super::texture::{TextureCollection, GLTexture, TextureID};
 
 use rand::Rng;
 
@@ -22,6 +23,9 @@ pub trait Scene {
 	fn view_distance(&self) -> f32 {
 		std::f32::INFINITY
 	}
+
+	/// Reference to texture used for drawing instances
+	fn texture(&self) -> &GLTexture;
 }
 
 use std::time::Instant;
@@ -35,6 +39,8 @@ pub struct TestScene {
 	pub view_origin: Point,
 	pub view_distance: f32,
 	last_update: Instant,
+
+	pub texture_collection: TextureCollection,
 }
 
 impl Scene for TestScene {
@@ -53,13 +59,20 @@ impl Scene for TestScene {
 	fn view_distance(&self) -> f32 {
 		self.view_distance
 	}
+
+	fn texture(&self) -> &GLTexture {
+		&self.texture_collection.texture
+	}
 }
 
 impl TestScene {
-	pub fn generate(columns: u32, rows: u32) -> TestScene {
+	pub fn generate(columns: u32, rows: u32, texture_collection: TextureCollection, lit_texture: TextureID, unlit_texture: TextureID) -> TestScene {
 		let mut rng = rand::thread_rng();
 		let mut objects = Vec::with_capacity((columns * rows) as usize);
 		let mut rotations = Vec::with_capacity((columns * rows) as usize);
+
+		let lit_texture = texture_collection.get(&lit_texture).unwrap();
+		let unlit_texture = texture_collection.get(&unlit_texture).unwrap();
 
 		for x in 0..columns {
 			for y in 0..rows {
@@ -69,7 +82,10 @@ impl TestScene {
 						rng.gen_range(0.0, MAX_ROTATION),
 						[1.0, 1.0],
 					),
-					color: [rng.gen(), rng.gen(), rng.gen(), 1.0],
+					color_lit: [rng.gen(), rng.gen(), rng.gen(), 1.0],
+					color_unlit: [rng.gen_range(0.0, 0.5), rng.gen_range(0.0, 0.5), rng.gen_range(0.0, 0.5), rng.gen()],
+					texture_lit: lit_texture,
+					texture_unlit: unlit_texture,
 				});
 				rotations.push(rng.gen_range(-PI, PI));
 			}
@@ -85,6 +101,8 @@ impl TestScene {
 			last_update: Instant::now(),
 			view_distance: ((columns * rows) as f32).powf(1.0 / 4.0),
 			view_origin: [0.0, 0.0],
+
+			texture_collection: texture_collection,
 		}
 	}
 
@@ -96,5 +114,9 @@ impl TestScene {
 			dest.transform.rotate(delta * src);
 		}
 		self.last_update = now;
+	}
+
+	pub fn free_texture_collection(self) -> TextureCollection {
+		self.texture_collection
 	}
 }

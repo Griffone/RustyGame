@@ -64,6 +64,11 @@ impl Rect {
 		Self {min: min, max: max}
 	}
 
+	/// Non-consuming transformation into [f32; 4]
+	pub fn get_vec4(&self) -> [f32; 4] {
+		[self.min[0], self.min[1], self.max[0], self.max[1]]
+	}
+
 	pub fn grow_to_fit(&mut self, point: &Point) {
 		if self.min[0] > point[0] {
 			self.min[0] = point[0];

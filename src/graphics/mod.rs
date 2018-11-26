@@ -1,10 +1,11 @@
 // Module that encopases all accelerated graphical presentation.
 
-pub use graphics::graphics::Graphics;	// Huh?
+pub use self::graphics::Graphics;
+pub use self::texture::TextureCollection;
 
-//mod texture;
 pub mod graphics;	// Graphical context, core module
 pub mod math;		// Helper functions
+pub mod texture;	// Smart texture wrapping above glium to allow instancing with different textures
 pub mod instance;	// A drawable object instance
 pub mod transform;	// Transformation of a drawable instance
 pub mod scene;		// A renderable scene

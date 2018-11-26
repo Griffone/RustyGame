@@ -17,7 +17,7 @@ use std::path::Path;
 
 // Graphical context
 pub struct Graphics {
-	display: Display, // takes ownership of the glium display object
+	pub display: Display, // takes ownership of the glium display object
 	program: Program, // shaders used to draw objects
 
 	quad_vertices: VertexBuffer<Vertex>,
@@ -25,9 +25,6 @@ pub struct Graphics {
 
 	instance_buffer: VertexBuffer<PerInstance>,
 	batch_size: usize,
-
-	texture: glium::texture::CompressedSrgbTexture2d,
-	dark: glium::texture::CompressedSrgbTexture2d,
 }
 
 impl Graphics {
@@ -39,19 +36,6 @@ impl Graphics {
 		let batch_size = config.batch_size;
 		let instances = generate_instance_buffer(&display, batch_size)?;
 
-		let texture = image::open(std::path::Path::new("data/textures/test.png"))
-			.unwrap()
-			.to_rgba();
-		let texture_size = texture.dimensions();
-		let texture =
-			glium::texture::RawImage2d::from_raw_rgba_reversed(&texture.into_raw(), texture_size);
-		let texture = glium::texture::CompressedSrgbTexture2d::new(&display, texture).unwrap();
-
-		let dark = image::open(std::path::Path::new("data/textures/dark.png")).unwrap().to_rgba();
-		let texture_size = dark.dimensions();
-		let dark = glium::texture::RawImage2d::from_raw_rgba_reversed(&dark.into_raw(), texture_size);
-		let dark = glium::texture::CompressedSrgbTexture2d::new(&display, dark).unwrap();
-
 		Ok(Graphics {
 			display: display,
 			program: program,
@@ -59,8 +43,6 @@ impl Graphics {
 			quad_indices: indcs,
 			instance_buffer: instances,
 			batch_size: batch_size,
-			texture: texture,
-			dark: dark,
 		})
 	}
 
@@ -100,10 +82,11 @@ impl Graphics {
 		let uniforms = uniform! {
 			u_scale: scale,
 			u_translation: view_rect.center(),
-			u_eye: scene.view_origin(),
-			u_see_dist: scene.view_distance(),
-			u_texture: &self.texture,
-			u_dark: &self.dark,
+
+			u_view_origin: scene.view_origin(),
+			u_view_distance: scene.view_distance(),
+
+			u_texture: scene.texture(),
 		};
 
 		let mut target = self.display.draw();

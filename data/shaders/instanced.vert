@@ -8,17 +8,22 @@ in vec2 tex_coords;
 in vec2 i_translation;
 in vec2 i_z_theta;
 in vec2 i_scale;
-in vec4 i_color;
+
+in vec4 i_color_lit;
+in vec4 i_color_unlit;
+in vec4 i_texture_lit;
+in vec4 i_texture_unlit;
 
 // Uniform data
 uniform vec2 u_scale;       // camera screen-space transformations
 uniform vec2 u_translation;
+uniform vec2 u_view_origin;
 
-//uniform vec2 u_eye;
-
-out vec2 v_tex_coords;
-out vec4 v_color;
-out vec2 v_pos;
+out vec2 v_coords_lit;
+out vec2 v_coords_unlit;
+out vec4 v_color_lit;
+out vec4 v_color_unlit;
+out float v_view_distance;
 
 void main() {
     float sinTheta = sin(i_z_theta[1]);
@@ -32,12 +37,14 @@ void main() {
     pos *= i_scale;
 
     pos += i_translation;
-    v_pos = pos;
+    v_view_distance = distance(pos, u_view_origin);
 
     pos -= u_translation;
     pos *= u_scale;
 
-    v_tex_coords = tex_coords;
-    v_color = i_color;
+    v_coords_lit = i_texture_lit.xy + (i_texture_lit.zw - i_texture_lit.xy) * tex_coords;
+    v_coords_unlit = i_texture_unlit.xy + (i_texture_unlit.zw - i_texture_unlit.xy) * tex_coords;
+    v_color_lit = i_color_lit;
+    v_color_unlit = i_color_unlit;
     gl_Position = vec4(pos, i_z_theta[0], 1);
 }

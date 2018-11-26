@@ -1,20 +1,21 @@
 #version 330 core
 
-in vec2 v_tex_coords;
-in vec4 v_color;
-in vec2 v_pos;
+in vec2 v_coords_lit;
+in vec2 v_coords_unlit;
+in vec4 v_color_lit;
+in vec4 v_color_unlit;
+in float v_view_distance;
 
-uniform vec2 u_eye;
-uniform float u_see_dist;
+uniform float u_view_distance;
 
 uniform sampler2D u_texture;
-uniform sampler2D u_dark;
 
 out vec4 out_color;
 
 void main() {
-  float dist = distance(u_eye, v_pos);
-  float ratio = clamp(u_see_dist - dist, 0, 1);
-  out_color = v_color * mix(texture(u_dark, v_tex_coords), texture(u_texture, v_tex_coords), ratio);
+  float ratio = clamp(u_view_distance - v_view_distance, 0, 1);
+  vec4 lit_color = v_color_lit * texture(u_texture, v_coords_lit);
+  vec4 unlit_color = v_color_unlit * texture(u_texture, v_coords_unlit);
+  out_color = mix(unlit_color, lit_color, ratio);
   if (out_color.a == 0) discard;
 }

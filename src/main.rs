@@ -20,7 +20,7 @@ mod graphics;
 
 use config::Configuration;
 use glium::glutin;
-use graphics::Graphics;
+use graphics::{Graphics, TextureCollection};
 use std::io;
 
 const FONT_PREFIX: &str = "data/fonts/";
@@ -97,10 +97,11 @@ fn main() {
 
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
+		let texture_collection = TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
 		let columns = count as u32 * 16;
 		let rows = count as u32 * 9;
 		let instance_count = columns * rows;
-		let mut scene = graphics::scene::TestScene::generate(columns, rows);
+		let mut scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
 
 		if config.debug_mode {
 			println!(
@@ -126,16 +127,17 @@ fn main() {
 
 			if state.change_size != 0 {
 				count += state.change_size;
+				let texture_collection = scene.free_texture_collection();
 				if count < 0 {
 					count = 0;
 				}
 				if count == 0 {
-					scene = graphics::scene::TestScene::generate(1, 1);
+					scene = graphics::scene::TestScene::generate(1, 1, texture_collection, String::from("test.png"), String::from("dark.png"));
 				} else {
 					let columns = count as u32 * 16;
 					let rows = count as u32 * 9;
 					let instance_count = columns * rows;
-					scene = graphics::scene::TestScene::generate(columns, rows);
+					scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
 
 					println!(
 						"Drawing {}x{}={} instances in {} batches",
