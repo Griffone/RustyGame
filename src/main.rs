@@ -42,6 +42,7 @@ struct WindowState {
 	last_size: (f64, f64),
 	window_size: (f64, f64),
 	change_size: i8,
+	sharpness_delta: f32,
 }
 
 fn main() {
@@ -65,6 +66,7 @@ fn main() {
 			window_size: WINDOW_DEFAULT_SIZE,
 			last_size: WINDOW_DEFAULT_SIZE,
 			change_size: 0,
+			sharpness_delta: 0.0,
 		};
 
 		if let Some(size) = config.window_size {
@@ -149,6 +151,8 @@ fn main() {
 				}
 				state.change_size = 0;
 			}
+			scene.sharpness *= 1.0 + state.sharpness_delta / 8.0;
+			state.sharpness_delta = 0.0;
 			scene.update();
 			let mouse = [(state.mouse_pos.0 / state.window_size.0) as f32, (state.mouse_pos.1 / state.window_size.1) as f32];
 			scene.view_origin = graphics.screen_to_world(mouse, &scene);
@@ -268,7 +272,12 @@ fn process_event(
 				state.mouse_pos = (position.x, position.y);
 			},
 			glutin::WindowEvent::MouseWheel {delta, modifiers, ..} => {
-				if modifiers.alt {
+				if modifiers.shift {
+					match delta {
+						glutin::MouseScrollDelta::LineDelta(_, delta) => state.sharpness_delta = *delta,
+						glutin::MouseScrollDelta::PixelDelta(delta) => state.sharpness_delta = delta.y as f32,
+					}
+				} else if modifiers.alt {
 					match delta {
 						glutin::MouseScrollDelta::LineDelta(_, delta) => state.change_size = *delta as i8,
 						glutin::MouseScrollDelta::PixelDelta(delta) => state.change_size = delta.y as i8,

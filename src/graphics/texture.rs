@@ -104,7 +104,6 @@ impl TextureCollection {
 		for (name, image) in texture_filenames.iter().zip(images.iter()) {
 			let (image_width, image_height) = image.dimensions();
 			let rect = Rect::new([pos_x as f32 / width, 1.0 - image_height as f32 / height], [(pos_x + image_width) as f32 / width, 1.0]);
-			println!("Loaded: {:?}", rect);
 			textures.insert(String::from(*name), Texture {area: rect});
 			texture.copy_from(image, pos_x, 0);
 			pos_x += image_width;

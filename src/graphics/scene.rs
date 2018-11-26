@@ -23,6 +23,9 @@ pub trait Scene {
 	fn view_distance(&self) -> f32 {
 		std::f32::INFINITY
 	}
+	fn view_sharpness(&self) -> f32 {
+		1.0
+	}
 
 	/// Reference to texture used for drawing instances
 	fn texture(&self) -> &GLTexture;
@@ -41,6 +44,7 @@ pub struct TestScene {
 	last_update: Instant,
 
 	pub texture_collection: TextureCollection,
+	pub sharpness: f32,
 }
 
 impl Scene for TestScene {
@@ -62,6 +66,10 @@ impl Scene for TestScene {
 
 	fn texture(&self) -> &GLTexture {
 		&self.texture_collection.texture
+	}
+
+	fn view_sharpness(&self) -> f32 {
+		self.sharpness
 	}
 }
 
@@ -103,6 +111,7 @@ impl TestScene {
 			view_origin: [0.0, 0.0],
 
 			texture_collection: texture_collection,
+			sharpness: 1.0,
 		}
 	}
 

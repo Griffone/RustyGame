@@ -85,6 +85,7 @@ impl Graphics {
 
 			u_view_origin: scene.view_origin(),
 			u_view_distance: scene.view_distance(),
+			u_view_sharpness: scene.view_sharpness(),
 
 			u_texture: scene.texture(),
 		};

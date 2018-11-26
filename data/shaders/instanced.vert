@@ -17,13 +17,12 @@ in vec4 i_texture_unlit;
 // Uniform data
 uniform vec2 u_scale;       // camera screen-space transformations
 uniform vec2 u_translation;
-uniform vec2 u_view_origin;
 
 out vec2 v_coords_lit;
 out vec2 v_coords_unlit;
 out vec4 v_color_lit;
 out vec4 v_color_unlit;
-out float v_view_distance;
+out vec2 v_position;
 
 void main() {
     float sinTheta = sin(i_z_theta[1]);
@@ -37,7 +36,7 @@ void main() {
     pos *= i_scale;
 
     pos += i_translation;
-    v_view_distance = distance(pos, u_view_origin);
+    v_position = pos;
 
     pos -= u_translation;
     pos *= u_scale;
