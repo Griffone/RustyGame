@@ -17,10 +17,15 @@ extern crate rand; // For loading texture files
 
 mod config;
 mod graphics;
+mod input;
 
 use config::Configuration;
-use glium::glutin;
+use input::Input;
+use input::Action as InputAction;
 use graphics::{Graphics, TextureCollection};
+
+use glium::glutin;
+
 use std::io;
 
 const FONT_PREFIX: &str = "data/fonts/";
@@ -82,6 +87,9 @@ fn main() {
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let mut graphics = Graphics::new(display, &config).unwrap();
 
+		
+		let mut input = Input::default();
+
 		if let Some(position) = config.window_position {
 			graphics.window().set_position(position.into());
 			state.last_pos = position;
@@ -98,6 +106,7 @@ fn main() {
 		}
 
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
+		input.set_on_up(input::Key {scancode: input::SCANCODE_F11, modifiers: input::MODIFIER_NONE}, InputAction::ToggleFullscreen);
 
 		let texture_collection = TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
 		let columns = count as u32 * 16;
@@ -161,7 +170,7 @@ fn main() {
 			graphics.draw(&scene);
 
 			events_loop.poll_events(|event| {
-				process_event(&event, &graphics.window(), &mut state, config.debug_mode);
+				process_event(&event, &mut input, &graphics.window(), &mut state, config.debug_mode);
 			});
 
 			let frametime = std::time::Instant::now().duration_since(frame_start);
@@ -231,9 +240,21 @@ fn set_fullscreen(window: &glutin::GlWindow, fullscreen: bool, state: &mut Windo
 	state.fullscreen = fullscreen;
 }
 
+fn process_action(
+	action: InputAction,
+	window: &glutin::GlWindow,
+	state: &mut WindowState,
+) {
+	match action {
+		InputAction::None => (),
+		InputAction::ToggleFullscreen => set_fullscreen(window, !state.fullscreen, state),
+	}
+}
+
 // Process all window events
 fn process_event(
 	event: &glutin::Event,
+	input: &mut Input,
 	window: &glutin::GlWindow,
 	state: &mut WindowState,
 	debug_mode: bool,
@@ -241,22 +262,7 @@ fn process_event(
 	match event {
 		glutin::Event::WindowEvent { event, .. } => match event {
 			glutin::WindowEvent::CloseRequested => state.closed = true,
-			glutin::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-				Some(glutin::VirtualKeyCode::F11) => {
-					if input.state == glutin::ElementState::Released {
-						set_fullscreen(window, !state.fullscreen, state);
-					}
-				}
-				Some(other) => {
-					if debug_mode {
-						println!(
-							"Unknown key press: {:?} : {:?} ({:?})",
-							other, input.state, input.modifiers
-						);
-					}
-				}
-				_ => (),
-			},
+			glutin::WindowEvent::KeyboardInput { input: keyboard_input, .. } => process_action(input.process_key(&keyboard_input), window, state),
 			glutin::WindowEvent::Moved(position) => {
 				if !state.fullscreen {
 					state.last_pos = (position.x, position.y);
