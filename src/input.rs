@@ -4,7 +4,7 @@ pub use glium::glutin::ScanCode;
 use std::collections::HashMap as Map;
 
 /// A bit-field for key modifiers
-/// 
+///
 /// Use MODIFIER_* for individual values
 pub type KeyModifiers = u8;
 
@@ -20,14 +20,21 @@ pub const SCANCODE_F11: ScanCode = 0x57;
 
 /// An action that can be caused by input
 #[derive(Clone, Copy, Debug)]
-pub enum Action {
+pub enum ActionId {
 	None,
 
 	ToggleFullscreen,
 }
 
+pub type ActionCallback = Box<Fn()>;
+
+enum Action {
+	Mapped(ActionCallback),
+	Unmapped(ActionId),
+}
+
 /// A key identifier
-/// 
+///
 /// Unique modifier-scancode pair,
 /// The game uses scancodes to be language agnostic.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -44,7 +51,7 @@ struct KeyInfo {
 }
 
 /// Holds input context
-/// 
+///
 /// Does minor pre-processing of input, operates on scenes and stuff.
 pub struct Input {
 	keys: Map<Key, KeyInfo>,
@@ -67,7 +74,20 @@ impl<'a> From<&'a glium::glutin::KeyboardInput> for Key {
 		if event.modifiers.logo {
 			modifiers |= MODIFIER_LOGO;
 		}
-		Self { scancode: event.scancode, modifiers }
+		Self {
+			scancode: event.scancode,
+			modifiers,
+		}
+	}
+}
+
+impl Default for KeyInfo {
+	fn default() -> Self {
+		Self {
+			pressed: false,
+			on_up: Action::Unmapped(ActionId::None),
+			on_down: Action::Unmapped(ActionId::None),
+		}
 	}
 }
 
@@ -98,7 +118,10 @@ impl KeyModifier for KeyModifiers {
 
 impl Default for Input {
 	fn default() -> Self {
-		Self { call_callbacks: false, keys: Map::new()}
+		Self {
+			call_callbacks: false,
+			keys: Map::new(),
+		}
 	}
 }
 
@@ -107,31 +130,73 @@ impl Input {
 		panic!("Input loading not implemented!");
 	}
 
-	pub fn set_on_down(&mut self, key: Key, action: Action) {
-		// FIXME: cleanup once rust compiler realizes self.keys are not borrowed for the whole scope...
-		let mut found = false;
-		{
+	pub fn set_on_down_action(&mut self, key: Key, action: ActionId) {
+		// Note: due to get_mut borrowing the collection for the whole context this is cleanest solution
+		// Ideally one would not need to query the key twice, but what the heck
+		let on_down = Action::Unmapped(action);
+		if self.keys.contains_key(&key) {
 			if let Some(info) = self.keys.get_mut(&key) {
-				info.on_down = action;
-				found = true;
+				info.on_down = on_down;
 			}
-		}
-		if !found {
-			self.keys.insert(key, KeyInfo {pressed: false, on_down: action, on_up: Action::None});
+		} else {
+			self.keys.insert(
+				key,
+				KeyInfo {
+					on_down,
+					..KeyInfo::default()
+				},
+			);
 		}
 	}
 
-	pub fn set_on_up(&mut self, key: Key, action: Action) {
-		// FIXME: cleanup once rust compiler realizes self.keys are not borrowed for the whole scope...
-		let mut found = false;
-		{
+	pub fn set_on_down_callback(&mut self, key: Key, callback: ActionCallback) {
+		let on_down = Action::Mapped(callback);
+		if self.keys.contains_key(&key) {
 			if let Some(info) = self.keys.get_mut(&key) {
-				info.on_up = action;
-				found = true;
+				info.on_down = on_down;
 			}
+		} else {
+			self.keys.insert(
+				key,
+				KeyInfo {
+					on_down,
+					..KeyInfo::default()
+				},
+			);
 		}
-		if !found {
-			self.keys.insert(key, KeyInfo {pressed: false, on_down: Action::None, on_up: action});
+	}
+
+	pub fn set_on_up_action(&mut self, key: Key, action: ActionId) {
+		let on_up = Action::Unmapped(action);
+		if self.keys.contains_key(&key) {
+			if let Some(info) = self.keys.get_mut(&key) {
+				info.on_up = on_up;
+			}
+		} else {
+			self.keys.insert(
+				key,
+				KeyInfo {
+					on_up,
+					..KeyInfo::default()
+				},
+			);
+		}
+	}
+
+	pub fn set_on_up_callback(&mut self, key: Key, callback: ActionCallback) {
+		let on_up = Action::Mapped(callback);
+		if self.keys.contains_key(&key) {
+			if let Some(info) = self.keys.get_mut(&key) {
+				info.on_up = on_up;
+			}
+		} else {
+			self.keys.insert(
+				key,
+				KeyInfo {
+					on_up,
+					..KeyInfo::default()
+				},
+			);
 		}
 	}
 
@@ -139,9 +204,8 @@ impl Input {
 		self.keys.remove(&key);
 	}
 
-	pub fn process_key(&mut self, event: &glium::glutin::KeyboardInput) -> Action {
+	pub fn process_key(&mut self, event: &glium::glutin::KeyboardInput) {
 		let key = event.into();
-		let mut action = Action::None;
 
 		if let Some(info) = self.keys.get_mut(&key) {
 			let pressed;
@@ -150,17 +214,35 @@ impl Input {
 				glium::glutin::ElementState::Released => pressed = false,
 			}
 			if pressed != info.pressed {
-				if pressed {
-					action = info.on_down;
-				} else {
-					action = info.on_up;
-				}
 				info.pressed = pressed;
+				if pressed {
+					match &info.on_down {
+						Action::Mapped(action) => action(),
+						Action::Unmapped(action) => eprintln!("Unmapped action {:?}!", action),
+					}
+				} else {
+					match &info.on_up {
+						Action::Mapped(action) => action(),
+						Action::Unmapped(action) => eprintln!("Unmapped action {:?}!", action),
+					}
+				}
 			}
 		}
-		
-		action
+	}
+
+	pub fn map_actions<T>(&mut self, mapper: T)
+	where
+		T: Fn(ActionId) -> ActionCallback,
+	{
+		for (_, value) in self.keys.iter_mut() {
+			match value.on_up {
+				Action::Unmapped(action_id) => value.on_up = Action::Mapped(mapper(action_id)),
+				_ => (),
+			};
+			match value.on_down {
+				Action::Unmapped(action_id) => value.on_down = Action::Mapped(mapper(action_id)),
+				_ => (),
+			}
+		}
 	}
 }
-
-fn do_nothing(_: &Key) {}

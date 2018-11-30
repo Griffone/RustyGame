@@ -20,9 +20,9 @@ mod graphics;
 mod input;
 
 use config::Configuration;
-use input::Input;
-use input::Action as InputAction;
 use graphics::{Graphics, TextureCollection};
+use input::ActionId as InputActionId;
+use input::Input;
 
 use glium::glutin;
 
@@ -87,7 +87,6 @@ fn main() {
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let mut graphics = Graphics::new(display, &config).unwrap();
 
-		
 		let mut input = Input::default();
 
 		if let Some(position) = config.window_position {
@@ -106,13 +105,27 @@ fn main() {
 		}
 
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
-		input.set_on_up(input::Key {scancode: input::SCANCODE_F11, modifiers: input::MODIFIER_NONE}, InputAction::ToggleFullscreen);
+		input.set_on_up_action(
+			input::Key {
+				scancode: input::SCANCODE_F11,
+				modifiers: input::MODIFIER_NONE,
+			},
+			InputActionId::ToggleFullscreen,
+		);
+		input.map_actions(|action| action_mapping(action));
 
-		let texture_collection = TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
+		let texture_collection =
+			TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
 		let columns = count as u32 * 16;
 		let rows = count as u32 * 9;
 		let instance_count = columns * rows;
-		let mut scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
+		let mut scene = graphics::scene::TestScene::generate(
+			columns,
+			rows,
+			texture_collection,
+			String::from("test.png"),
+			String::from("dark.png"),
+		);
 
 		if config.debug_mode {
 			println!(
@@ -143,12 +156,24 @@ fn main() {
 					count = 0;
 				}
 				if count == 0 {
-					scene = graphics::scene::TestScene::generate(1, 1, texture_collection, String::from("test.png"), String::from("dark.png"));
+					scene = graphics::scene::TestScene::generate(
+						1,
+						1,
+						texture_collection,
+						String::from("test.png"),
+						String::from("dark.png"),
+					);
 				} else {
 					let columns = count as u32 * 16;
 					let rows = count as u32 * 9;
 					let instance_count = columns * rows;
-					scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
+					scene = graphics::scene::TestScene::generate(
+						columns,
+						rows,
+						texture_collection,
+						String::from("test.png"),
+						String::from("dark.png"),
+					);
 
 					println!(
 						"Drawing {}x{}={} instances in {} batches",
@@ -163,14 +188,23 @@ fn main() {
 			scene.sharpness *= 1.0 + state.sharpness_delta / 8.0;
 			state.sharpness_delta = 0.0;
 			scene.update();
-			let mouse = [(state.mouse_pos.0 / state.window_size.0) as f32, (state.mouse_pos.1 / state.window_size.1) as f32];
+			let mouse = [
+				(state.mouse_pos.0 / state.window_size.0) as f32,
+				(state.mouse_pos.1 / state.window_size.1) as f32,
+			];
 			scene.view_origin = graphics.screen_to_world(mouse, &scene);
 			scene.view_distance *= 1.0 + state.wheel_delta / 8.0;
 			state.wheel_delta = 0.0;
 			graphics.draw(&scene);
 
 			events_loop.poll_events(|event| {
-				process_event(&event, &mut input, &graphics.window(), &mut state, config.debug_mode);
+				process_event(
+					&event,
+					&mut input,
+					&graphics.window(),
+					&mut state,
+					config.debug_mode,
+				);
 			});
 
 			let frametime = std::time::Instant::now().duration_since(frame_start);
@@ -240,14 +274,14 @@ fn set_fullscreen(window: &glutin::GlWindow, fullscreen: bool, state: &mut Windo
 	state.fullscreen = fullscreen;
 }
 
-fn process_action(
-	action: InputAction,
-	window: &glutin::GlWindow,
-	state: &mut WindowState,
-) {
-	match action {
-		InputAction::None => (),
-		InputAction::ToggleFullscreen => set_fullscreen(window, !state.fullscreen, state),
+fn toggle_fullscreen() {
+	println!("Need to figure out context passing.");
+}
+
+fn action_mapping(action_id: InputActionId) -> input::ActionCallback {
+	match action_id {
+		InputActionId::ToggleFullscreen => Box::new(|| toggle_fullscreen()),
+		_ => Box::new(|| ()),
 	}
 }
 
@@ -262,36 +296,51 @@ fn process_event(
 	match event {
 		glutin::Event::WindowEvent { event, .. } => match event {
 			glutin::WindowEvent::CloseRequested => state.closed = true,
-			glutin::WindowEvent::KeyboardInput { input: keyboard_input, .. } => process_action(input.process_key(&keyboard_input), window, state),
+			glutin::WindowEvent::KeyboardInput {
+				input: keyboard_input,
+				..
+			} => input.process_key(&keyboard_input),
 			glutin::WindowEvent::Moved(position) => {
 				if !state.fullscreen {
 					state.last_pos = (position.x, position.y);
 				}
-			},
+			}
 			glutin::WindowEvent::Resized(size) => {
 				if !state.fullscreen {
 					state.last_size = (size.width, size.height);
 				}
 				state.window_size = (size.width, size.height);
-			},
-			glutin::WindowEvent::CursorMoved {position, ..} => {
+			}
+			glutin::WindowEvent::CursorMoved { position, .. } => {
 				state.mouse_pos = (position.x, position.y);
-			},
-			glutin::WindowEvent::MouseWheel {delta, modifiers, ..} => {
+			}
+			glutin::WindowEvent::MouseWheel {
+				delta, modifiers, ..
+			} => {
 				if modifiers.shift {
 					match delta {
-						glutin::MouseScrollDelta::LineDelta(_, delta) => state.sharpness_delta = *delta,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.sharpness_delta = delta.y as f32,
+						glutin::MouseScrollDelta::LineDelta(_, delta) => {
+							state.sharpness_delta = *delta
+						}
+						glutin::MouseScrollDelta::PixelDelta(delta) => {
+							state.sharpness_delta = delta.y as f32
+						}
 					}
 				} else if modifiers.alt {
 					match delta {
-						glutin::MouseScrollDelta::LineDelta(_, delta) => state.change_size = *delta as i8,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.change_size = delta.y as i8,
+						glutin::MouseScrollDelta::LineDelta(_, delta) => {
+							state.change_size = *delta as i8
+						}
+						glutin::MouseScrollDelta::PixelDelta(delta) => {
+							state.change_size = delta.y as i8
+						}
 					}
 				} else {
 					match delta {
 						glutin::MouseScrollDelta::LineDelta(_, delta) => state.wheel_delta = *delta,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.wheel_delta = delta.y as f32,
+						glutin::MouseScrollDelta::PixelDelta(delta) => {
+							state.wheel_delta = delta.y as f32
+						}
 					}
 				}
 			}
