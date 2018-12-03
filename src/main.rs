@@ -17,10 +17,15 @@ extern crate rand; // For loading texture files
 
 mod config;
 mod graphics;
+mod input;
 
 use config::Configuration;
-use glium::glutin;
 use graphics::{Graphics, TextureCollection};
+use input::Action as InputAction;
+use input::{Input, WheelAction};
+
+use glium::glutin;
+
 use std::io;
 
 const FONT_PREFIX: &str = "data/fonts/";
@@ -36,13 +41,9 @@ const WINDOW_DEFAULT_SIZE: (f64, f64) = (800.0, 600.0);
 struct WindowState {
 	fullscreen: bool,
 	closed: bool,
-	mouse_pos: (f64, f64),
-	wheel_delta: f32,
 	last_pos: (f64, f64),
 	last_size: (f64, f64),
 	window_size: (f64, f64),
-	change_size: i8,
-	sharpness_delta: f32,
 }
 
 fn main() {
@@ -60,13 +61,9 @@ fn main() {
 		let mut state = WindowState {
 			fullscreen: false,
 			closed: false,
-			mouse_pos: (0.0, 0.0),
-			wheel_delta: 0.0,
 			last_pos: (0.0, 0.0),
 			window_size: WINDOW_DEFAULT_SIZE,
 			last_size: WINDOW_DEFAULT_SIZE,
-			change_size: 0,
-			sharpness_delta: 0.0,
 		};
 
 		if let Some(size) = config.window_size {
@@ -81,6 +78,8 @@ fn main() {
 		let context_builder = glutin::ContextBuilder::new().with_vsync(config.vsync);
 		let display = glium::Display::new(window_builder, context_builder, &events_loop).unwrap();
 		let mut graphics = Graphics::new(display, &config).unwrap();
+
+		let mut input = Input::with_default_actions();
 
 		if let Some(position) = config.window_position {
 			graphics.window().set_position(position.into());
@@ -99,11 +98,18 @@ fn main() {
 
 		set_fullscreen(&graphics.window(), config.fullscreen, &mut state);
 
-		let texture_collection = TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
+		let texture_collection =
+			TextureCollection::new(&graphics, &vec!["test.png", "dark.png"]).unwrap();
 		let columns = count as u32 * 16;
 		let rows = count as u32 * 9;
 		let instance_count = columns * rows;
-		let mut scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
+		let mut scene = graphics::scene::TestScene::generate(
+			columns,
+			rows,
+			texture_collection,
+			String::from("test.png"),
+			String::from("dark.png"),
+		);
 
 		if config.debug_mode {
 			println!(
@@ -127,41 +133,19 @@ fn main() {
 		while !state.closed {
 			let frame_start = std::time::Instant::now();
 
-			if state.change_size != 0 {
-				count += state.change_size;
-				let texture_collection = scene.free_texture_collection();
-				if count < 0 {
-					count = 0;
-				}
-				if count == 0 {
-					scene = graphics::scene::TestScene::generate(1, 1, texture_collection, String::from("test.png"), String::from("dark.png"));
-				} else {
-					let columns = count as u32 * 16;
-					let rows = count as u32 * 9;
-					let instance_count = columns * rows;
-					scene = graphics::scene::TestScene::generate(columns, rows, texture_collection, String::from("test.png"), String::from("dark.png"));
-
-					println!(
-						"Drawing {}x{}={} instances in {} batches",
-						columns,
-						rows,
-						instance_count,
-						(instance_count as f32 / config.batch_size as f32).ceil() as i32
-					);
-				}
-				state.change_size = 0;
-			}
-			scene.sharpness *= 1.0 + state.sharpness_delta / 8.0;
-			state.sharpness_delta = 0.0;
 			scene.update();
-			let mouse = [(state.mouse_pos.0 / state.window_size.0) as f32, (state.mouse_pos.1 / state.window_size.1) as f32];
-			scene.view_origin = graphics.screen_to_world(mouse, &scene);
-			scene.view_distance *= 1.0 + state.wheel_delta / 8.0;
-			state.wheel_delta = 0.0;
+			scene.view_origin = graphics.screen_to_world(input.relative_mouse_position(), &scene);
 			graphics.draw(&scene);
 
 			events_loop.poll_events(|event| {
-				process_event(&event, &graphics.window(), &mut state, config.debug_mode);
+				process_event(
+					&event,
+					&mut input,
+					&mut state,
+					|action, window_state| process_action(action, window_state, &graphics.window()),
+					|action, delta| process_wheel_action(action, delta, &mut scene),
+					config.debug_mode,
+				);
 			});
 
 			let frametime = std::time::Instant::now().duration_since(frame_start);
@@ -231,62 +215,79 @@ fn set_fullscreen(window: &glutin::GlWindow, fullscreen: bool, state: &mut Windo
 	state.fullscreen = fullscreen;
 }
 
+fn process_action(action: InputAction, window_state: &mut WindowState, window: &glutin::GlWindow) {
+	use InputAction::*;
+	match action {
+		None => (),
+		ToggleFullscreen => set_fullscreen(window, !window_state.fullscreen, window_state),
+	}
+}
+
+fn process_wheel_action(action: WheelAction, delta: f32, scene: &mut graphics::scene::TestScene) {
+	use WheelAction::*;
+	match action {
+		None => (),
+		ChangeViewSize => scene.view_distance *= 1.0 + delta / 8.0,
+		ChangeViewSharpness => scene.sharpness *= 1.0 + delta / 8.0,
+		ChangeSceneSize => (),
+	};
+}
+
 // Process all window events
-fn process_event(
+fn process_event<T, U>(
 	event: &glutin::Event,
-	window: &glutin::GlWindow,
-	state: &mut WindowState,
+	input: &mut Input,
+	window_state: &mut WindowState,
+	mut action_processor: T,
+	mut wheel_action_processor: U,
 	debug_mode: bool,
-) {
+) where
+	T: FnMut(InputAction, &mut WindowState),
+	U: FnMut(WheelAction, f32),
+{
 	match event {
 		glutin::Event::WindowEvent { event, .. } => match event {
-			glutin::WindowEvent::CloseRequested => state.closed = true,
-			glutin::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-				Some(glutin::VirtualKeyCode::F11) => {
-					if input.state == glutin::ElementState::Released {
-						set_fullscreen(window, !state.fullscreen, state);
-					}
+			glutin::WindowEvent::CloseRequested => window_state.closed = true,
+			glutin::WindowEvent::KeyboardInput {
+				input: keyboard_input,
+				..
+			} => {
+				if let Some(action) = input.process_key(&keyboard_input) {
+					action_processor(action, window_state);
 				}
-				Some(other) => {
-					if debug_mode {
-						println!(
-							"Unknown key press: {:?} : {:?} ({:?})",
-							other, input.state, input.modifiers
-						);
-					}
-				}
-				_ => (),
-			},
+			}
 			glutin::WindowEvent::Moved(position) => {
-				if !state.fullscreen {
-					state.last_pos = (position.x, position.y);
+				if !window_state.fullscreen {
+					window_state.last_pos = (position.x, position.y);
 				}
-			},
+			}
 			glutin::WindowEvent::Resized(size) => {
-				if !state.fullscreen {
-					state.last_size = (size.width, size.height);
+				if !window_state.fullscreen {
+					window_state.last_size = (size.width, size.height);
 				}
-				state.window_size = (size.width, size.height);
-			},
-			glutin::WindowEvent::CursorMoved {position, ..} => {
-				state.mouse_pos = (position.x, position.y);
-			},
-			glutin::WindowEvent::MouseWheel {delta, modifiers, ..} => {
-				if modifiers.shift {
+				window_state.window_size = (size.width, size.height);
+				input.update_viewport_size((size.width as f32, size.height as f32));
+			}
+			glutin::WindowEvent::CursorMoved { position, .. } => {
+				input.update_mouse_position((position.x as f32, position.y as f32))
+			}
+			glutin::WindowEvent::MouseWheel {
+				delta, modifiers, ..
+			} => {
+				if let Some(action) = input.process_mouse_wheel(&modifiers) {
+					let wdelta: f32;
 					match delta {
-						glutin::MouseScrollDelta::LineDelta(_, delta) => state.sharpness_delta = *delta,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.sharpness_delta = delta.y as f32,
-					}
-				} else if modifiers.alt {
-					match delta {
-						glutin::MouseScrollDelta::LineDelta(_, delta) => state.change_size = *delta as i8,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.change_size = delta.y as i8,
-					}
-				} else {
-					match delta {
-						glutin::MouseScrollDelta::LineDelta(_, delta) => state.wheel_delta = *delta,
-						glutin::MouseScrollDelta::PixelDelta(delta) => state.wheel_delta = delta.y as f32,
-					}
+						glutin::MouseScrollDelta::LineDelta(_x, y) => wdelta = *y,
+						glutin::MouseScrollDelta::PixelDelta(delta) => wdelta = delta.y as f32,
+					};
+					wheel_action_processor(action, wdelta);
+				}
+			}
+			glutin::WindowEvent::MouseInput {
+				state, button, modifiers, ..
+			} => {
+				if let Some(action) = input.process_button(&state, &button, &modifiers) {
+					action_processor(action, window_state);
 				}
 			}
 			other => {

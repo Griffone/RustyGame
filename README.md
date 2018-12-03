@@ -8,7 +8,7 @@ A hardware-accelerated 2D* game in Rust.
 - [x] Populate window with OpenGL context
 - [x] Basic graphics
 - [x] Instancing
-- [ ] Graphical backend
+- [x] Graphical backend
 - [ ] General file loading
 - [ ] Basic text rendering
 - [ ] GUI layouter

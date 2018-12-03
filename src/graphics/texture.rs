@@ -23,7 +23,7 @@ const DEFAULT_FORMAT: GLTextureFormat = GLTextureFormat::S3tcDxt1Alpha;
 const USED_MIPMAP: glium::texture::CompressedMipmapsOption = glium::texture::CompressedMipmapsOption::NoMipmap;
 
 // A single texture
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Texture {
 	pub area: Rect,
 }
@@ -31,6 +31,7 @@ pub struct Texture {
 /// A collection of multiple textures.
 /// 
 /// Internally stored as an atlas to enable instancing with different textures from the same collection.
+#[derive(Debug)]
 pub struct TextureCollection {
 	textures: Map<TextureID, Texture>,
 	pub texture: GLTexture,
