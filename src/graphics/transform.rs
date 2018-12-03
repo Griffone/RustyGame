@@ -1,7 +1,7 @@
 use super::math::{Lerp, MAX_ROTATION};
 
 // Transformation of a drawable object
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Transform {
 	pub translation: [f32; 2],	// Position of the object in world space
 	pub rotation: f32,			// Rotation around the origin of the object in radians

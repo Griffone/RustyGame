@@ -34,6 +34,7 @@ pub trait Scene {
 use std::time::Instant;
 
 /// A basic temporary implementation of a Scene trait for testing purposes
+#[derive(Debug)]
 pub struct TestScene {
 	pub objects: Vec<Instance>,
 	pub view_rect: Rect,

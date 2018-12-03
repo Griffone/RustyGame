@@ -4,7 +4,7 @@ use super::math::Lerp;
 use super::texture::Texture;
 use super::transform::Transform;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Instance {
 	pub transform: Transform,
 	pub color_lit: [f32; 4],
